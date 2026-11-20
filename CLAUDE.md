@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Express.js + TypeScript AI assistant server for a Polish accounting mobile app (JDG/sole proprietorship). The server acts as a middleware between a React Native app and the OpenAI API, with tool use to fetch data from an external accounting API. It offers a text chat (Chat Completions, SSE) and voice-to-voice (Realtime API, WebSocket).
+Express.js + TypeScript AI assistant server for a Polish accounting mobile app (JDG/sole proprietorship). The server acts as a middleware between a React Native app and the OpenAI API, with tool use to fetch data from an external accounting API. It offers a text chat (Responses API, SSE) and voice-to-voice (Realtime API, WebSocket).
 
 ## Commands
 
@@ -13,7 +13,7 @@ npm start          # runs the server (uses npx tsx index.ts), needs OPENAI_API_K
 npm run typecheck  # tsc --noEmit
 ```
 
-Configuration is via env vars, see `.env.example` (models, voice, port).
+Configuration is via env vars or a gitignored `.env` file, see `.env.example` (models, voice, port). In the Claude Code cloud sandbox run with `NODE_USE_ENV_PROXY=1` so Node's fetch uses the outbound proxy.
 
 ## Files
 
@@ -22,7 +22,7 @@ Configuration is via env vars, see `.env.example` (models, voice, port).
 | `index.ts` | Express app, routes, attaches the realtime WebSocket |
 | `config.ts` | env config + shared `OpenAI` client |
 | `prompt.ts` | screen context + system prompt (text) + voice instructions (system prompt + voice rules) |
-| `chat.ts` | `POST /chat` — agentic loop over Chat Completions streaming |
+| `chat.ts` | `POST /chat` — agentic loop over Responses API streaming |
 | `realtime.ts` | `/realtime` WebSocket — relay to OpenAI Realtime, server-side tool execution |
 | `docs/realtime.md` | protocol for the mobile app (voice) |
 
@@ -31,7 +31,7 @@ Configuration is via env vars, see `.env.example` (models, voice, port).
 ### Text chat request flow
 
 1. React Native app sends `POST /chat` with `Authorization: Bearer <token>`, `X-Api-Url: <api>` and optional `X-Screen-Context: <json>` headers
-2. Server runs an agentic loop — calls OpenAI Chat Completions (streaming) with tools, executes tool calls (in parallel) against the external API, loops until the model returns no tool calls
+2. Server runs an agentic loop — calls OpenAI Responses API (streaming, `store: false`, encrypted reasoning passed back between iterations) with tools, executes tool calls (in parallel) against the external API, loops until the model returns no tool calls
 3. Responses stream back over SSE with named events
 
 ### SSE event types

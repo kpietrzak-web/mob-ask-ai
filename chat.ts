@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import type { ChatCompletionMessageParam, ChatCompletionMessageFunctionToolCall } from "openai/resources/chat/completions";
+import type { ResponseFunctionToolCall, ResponseInputItem, ResponseOutputItem } from "openai/resources/responses/responses";
 import type { ReasoningEffort } from "openai/resources/shared";
 import { config, openai } from "./config";
 import { buildSystemPrompt, parseScreenContext } from "./prompt";
@@ -18,7 +18,7 @@ function contentToText(content: unknown): string {
   return "";
 }
 
-export function toChatHistory(raw: unknown): ChatCompletionMessageParam[] {
+export function toChatHistory(raw: unknown): ResponseInputItem[] {
   if (!Array.isArray(raw)) return [];
   return raw
     .filter((m) => m && (m.role === "user" || m.role === "assistant"))
@@ -37,8 +37,8 @@ export async function chatHandler(req: Request, res: Response) {
   };
   const ctx: ApiContext = { token, apiUrl, emit: sse.action };
 
-  const messages = toChatHistory(req.body?.messages);
-  const latestUserMessage = messages.at(-1);
+  const input = toChatHistory(req.body?.messages);
+  const latestUserMessage = input.at(-1) as { content?: unknown } | undefined;
   const screenLog = screenContext.screen
     ? `| screen: ${JSON.stringify(screenContext)}`
     : "";
@@ -50,7 +50,7 @@ export async function chatHandler(req: Request, res: Response) {
   const abort = new AbortController();
   res.on("close", () => { if (!res.writableEnded) abort.abort(); });
 
-  const system = buildSystemPrompt(screenContext);
+  const instructions = buildSystemPrompt(screenContext);
   let fullReply = "";
   let iteration = 0;
 
@@ -58,47 +58,50 @@ export async function chatHandler(req: Request, res: Response) {
     while (true) {
       if (iteration++ > 0 && fullReply.length > 0) sse.text("\n\n");
 
-      const stream = await openai.chat.completions.create(
+      // Stateless (store: false): the whole conversation is sent each time, as before.
+      // Encrypted reasoning items are passed back between tool-call iterations.
+      const stream = await openai.responses.create(
         {
           model: config.chatModel,
-          max_completion_tokens: config.chatMaxCompletionTokens,
-          ...(config.chatReasoningEffort
-            ? { reasoning_effort: config.chatReasoningEffort as ReasoningEffort }
-            : {}),
-          messages: [{ role: "system", content: system }, ...messages],
+          instructions,
+          input,
           tools: chatTools,
+          max_output_tokens: config.chatMaxOutputTokens,
+          ...(config.chatReasoningEffort
+            ? {
+                reasoning: { effort: config.chatReasoningEffort as ReasoningEffort },
+                include: ["reasoning.encrypted_content" as const],
+              }
+            : {}),
+          store: false,
           stream: true,
         },
         { signal: abort.signal }
       );
 
-      let turnText = "";
-      const toolCalls: ChatCompletionMessageFunctionToolCall[] = [];
+      let output: ResponseOutputItem[] = [];
 
-      for await (const chunk of stream) {
-        const delta = chunk.choices[0]?.delta;
-        if (!delta) continue;
-
-        if (delta.content) {
-          turnText += delta.content;
-          fullReply += delta.content;
-          sse.text(delta.content);
-        }
-
-        // Tool call arguments arrive in fragments, keyed by index.
-        for (const tc of delta.tool_calls ?? []) {
-          const call = (toolCalls[tc.index] ??= {
-            id: "",
-            type: "function",
-            function: { name: "", arguments: "" },
-          });
-          if (tc.id) call.id = tc.id;
-          if (tc.function?.name) call.function.name += tc.function.name;
-          if (tc.function?.arguments) call.function.arguments += tc.function.arguments;
+      for await (const event of stream) {
+        switch (event.type) {
+          case "response.output_text.delta":
+            fullReply += event.delta;
+            sse.text(event.delta);
+            break;
+          case "response.completed":
+          case "response.incomplete":
+            output = event.response.output;
+            if (event.type === "response.incomplete") {
+              console.warn("[warn] response incomplete:", event.response.incomplete_details);
+            }
+            break;
+          case "response.failed":
+            throw new Error(`Response failed: ${JSON.stringify(event.response.error)}`);
+          case "error":
+            throw new Error(`Stream error: ${event.message}`);
         }
       }
 
-      const calls = toolCalls.filter(Boolean);
+      const calls = output.filter((i): i is ResponseFunctionToolCall => i.type === "function_call");
       if (calls.length === 0) {
         console.log("[agent]", fullReply);
         sse.done();
@@ -106,17 +109,17 @@ export async function chatHandler(req: Request, res: Response) {
         break;
       }
 
-      messages.push({ role: "assistant", content: turnText || null, tool_calls: calls });
+      input.push(...(output as ResponseInputItem[]));
 
       const toolResults = await Promise.all(
         calls.map(async (c) => ({
-          role: "tool" as const,
-          tool_call_id: c.id,
-          content: await runToolForModel(c.function.name, c.function.arguments, ctx),
+          type: "function_call_output" as const,
+          call_id: c.call_id,
+          output: await runToolForModel(c.name, c.arguments, ctx),
         }))
       );
 
-      messages.push(...toolResults);
+      input.push(...toolResults);
     }
   } catch (err) {
     if (!abort.signal.aborted) console.error("[error]", err);

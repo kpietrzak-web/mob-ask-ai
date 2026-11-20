@@ -1,4 +1,4 @@
-import type { ChatCompletionFunctionTool } from "openai/resources/chat/completions";
+import type { FunctionTool } from "openai/resources/responses/responses";
 import type { RealtimeFunctionTool } from "openai/resources/realtime/realtime";
 import type { ApiContext, ToolDefinition, ToolSchema } from "./types";
 import userInfoTool from "./user-info";
@@ -61,10 +61,13 @@ const registry: Record<string, ToolDefinition> = {
 
 export const toolSchemas: ToolSchema[] = Object.values(registry).map((t) => t.schema);
 
-/** Tools in OpenAI Chat Completions format (`POST /chat`). */
-export const chatTools: ChatCompletionFunctionTool[] = toolSchemas.map((s) => ({
+/** Tools in OpenAI Responses API format (`POST /chat`). */
+export const chatTools: FunctionTool[] = toolSchemas.map((s) => ({
   type: "function",
-  function: { name: s.name, description: s.description, parameters: s.input_schema },
+  name: s.name,
+  description: s.description,
+  parameters: s.input_schema,
+  strict: false,
 }));
 
 /** Tools in OpenAI Realtime session format (`/realtime` voice). */

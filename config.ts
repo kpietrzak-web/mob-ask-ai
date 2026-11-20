@@ -1,5 +1,8 @@
 import OpenAI from "openai";
 
+// Load .env if present (gitignored). Variables already set in the environment win.
+try { process.loadEnvFile(); } catch { /* no .env file */ }
+
 function env(name: string, fallback: string): string {
   const v = process.env[name];
   return v === undefined || v === "" ? fallback : v;
@@ -13,7 +16,7 @@ export const config = {
   /** Reasoning effort for reasoning models; set to "" to omit the parameter (e.g. for gpt-4.1). */
   chatReasoningEffort: process.env.OPENAI_CHAT_REASONING_EFFORT ?? "low",
   /** Includes reasoning tokens on reasoning models, so it is higher than the old 1024. */
-  chatMaxCompletionTokens: Number(env("OPENAI_CHAT_MAX_COMPLETION_TOKENS", "4096")),
+  chatMaxOutputTokens: Number(env("OPENAI_CHAT_MAX_OUTPUT_TOKENS", "4096")),
 
   /** Realtime voice (`/realtime`). */
   realtimeModel: env("OPENAI_REALTIME_MODEL", "gpt-realtime"),
