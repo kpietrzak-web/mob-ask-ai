@@ -4,20 +4,34 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Express.js + TypeScript AI assistant server for a Polish accounting mobile app (JDG/sole proprietorship). The server acts as a middleware between a React Native app and the Anthropic Claude API, with tool use to fetch data from an external accounting API.
+Express.js + TypeScript AI assistant server for a Polish accounting mobile app (JDG/sole proprietorship). The server acts as a middleware between a React Native app and the OpenAI API, with tool use to fetch data from an external accounting API. It offers a text chat (Chat Completions, SSE) and voice-to-voice (Realtime API, WebSocket).
 
 ## Commands
 
 ```bash
-npm start        # runs the server (uses npx tsx index.ts)
+npm start          # runs the server (uses npx tsx index.ts), needs OPENAI_API_KEY
+npm run typecheck  # tsc --noEmit
 ```
+
+Configuration is via env vars, see `.env.example` (models, voice, port).
+
+## Files
+
+| File | Purpose |
+|---|---|
+| `index.ts` | Express app, routes, attaches the realtime WebSocket |
+| `config.ts` | env config + shared `OpenAI` client |
+| `prompt.ts` | screen context + system prompt (text) + voice instructions (system prompt + voice rules) |
+| `chat.ts` | `POST /chat` — agentic loop over Chat Completions streaming |
+| `realtime.ts` | `/realtime` WebSocket — relay to OpenAI Realtime, server-side tool execution |
+| `docs/realtime.md` | protocol for the mobile app (voice) |
 
 ## Architecture
 
-### Request flow
+### Text chat request flow
 
-1. React Native app sends `POST /chat` with `Authorization: Bearer <token>` and `X-Api-Url: <api>` headers
-2. Server runs an agentic loop — calls Claude with tools, executes tool calls against the external API, loops until `stop_reason !== "tool_use"`
+1. React Native app sends `POST /chat` with `Authorization: Bearer <token>`, `X-Api-Url: <api>` and optional `X-Screen-Context: <json>` headers
+2. Server runs an agentic loop — calls OpenAI Chat Completions (streaming) with tools, executes tool calls (in parallel) against the external API, loops until the model returns no tool calls
 3. Responses stream back over SSE with named events
 
 ### SSE event types
@@ -28,7 +42,7 @@ npm start        # runs the server (uses npx tsx index.ts)
 | `action` | JSON object | UI action for the mobile app |
 | `done` | `[DONE]` | Stream complete |
 
-### Action types (`event: action`)
+### Action types (`event: action`, or `mob.action` in voice)
 
 Actions have two subtypes controlled by `actionType`:
 - `"direct"` — mobile app navigates immediately (user explicitly asked, e.g. "add contractor XXX")
@@ -40,15 +54,19 @@ Actions have two subtypes controlled by `actionType`:
 
 ### Session history
 
-Server stores full conversation history (including `tool_use`/`tool_result` blocks) in a `Map<token, MessageParam[]>`. On each request only the latest user message is taken from the request body and appended to stored history. Reset via `DELETE /chat`.
+The server is stateless for text chat: the app sends the whole conversation (`messages: [{ role, content }]`, content is a string or `[{ type: "text", text }]`) on each request. Tool calls/results live only inside one request. `DELETE /chat` is a no-op kept for compatibility. Voice sessions keep their history inside the OpenAI Realtime session for as long as the WebSocket is open; the app can seed it with the text chat via `mob.history`.
+
+### Voice (`/realtime`)
+
+WebSocket relay: app ⇄ server ⇄ OpenAI Realtime (`gpt-realtime`). The server sets instructions (`buildVoiceInstructions`) and tools on connect; the app cannot override `instructions`/`tools`/`tool_choice`/`model`. Function calls are run on the server when `response.done` arrives (skipped if the response was interrupted), then `function_call_output` + `response.create` are sent. Extra `mob.*` events are described in `docs/realtime.md`.
 
 ### Tools (`tools/`)
 
-Each tool is a file exporting a default `ToolDefinition` with a `schema` (Anthropic tool definition) and an `execute` function.
+Each tool is a file exporting a default `ToolDefinition` with a `schema` (provider-neutral: `name`, `description`, `input_schema` JSON Schema) and an `execute` function. Schemas are converted to OpenAI formats in `tools/index.ts` (`chatTools`, `realtimeTools`).
 
-**`tools/types.ts`** — shared interfaces: `ApiContext` (token, apiUrl, emit), `ToolDefinition`, `apiUrl()` helper (strips trailing slash).
+**`tools/types.ts`** — shared interfaces: `ToolSchema`, `ApiContext` (token, apiUrl, emit), `ToolDefinition`, `apiUrl()` helper (strips trailing slash).
 
-**`tools/index.ts`** — registry. To add a new tool: create a file, export a `ToolDefinition`, add two lines here (import + registry entry).
+**`tools/index.ts`** — registry + `runToolForModel` (parses args, runs the tool, returns JSON; errors go back to the model as `{ error }`). To add a new tool: create a file, export a `ToolDefinition`, add two lines here (import + registry entry). It is then available in both text and voice.
 
 **API tools** (fetch from external accounting API):
 

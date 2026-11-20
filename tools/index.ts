@@ -1,5 +1,6 @@
-import type Anthropic from "@anthropic-ai/sdk";
-import type { ApiContext, ToolDefinition } from "./types";
+import type { ChatCompletionFunctionTool } from "openai/resources/chat/completions";
+import type { RealtimeFunctionTool } from "openai/resources/realtime/realtime";
+import type { ApiContext, ToolDefinition, ToolSchema } from "./types";
 import userInfoTool from "./user-info";
 import contractorsTool from "./contractors";
 import bankAccountsTool from "./bank-accounts";
@@ -58,7 +59,21 @@ const registry: Record<string, ToolDefinition> = {
   [sendInvoiceReminderTool.schema.name]: sendInvoiceReminderTool,
 };
 
-export const toolSchemas: Anthropic.Tool[] = Object.values(registry).map((t) => t.schema);
+export const toolSchemas: ToolSchema[] = Object.values(registry).map((t) => t.schema);
+
+/** Tools in OpenAI Chat Completions format (`POST /chat`). */
+export const chatTools: ChatCompletionFunctionTool[] = toolSchemas.map((s) => ({
+  type: "function",
+  function: { name: s.name, description: s.description, parameters: s.input_schema },
+}));
+
+/** Tools in OpenAI Realtime session format (`/realtime` voice). */
+export const realtimeTools: RealtimeFunctionTool[] = toolSchemas.map((s) => ({
+  type: "function",
+  name: s.name,
+  description: s.description,
+  parameters: s.input_schema,
+}));
 
 export async function executeTool(
   name: string,
@@ -68,6 +83,29 @@ export async function executeTool(
   const tool = registry[name];
   if (!tool) throw new Error(`Unknown tool: ${name}`);
   return tool.execute(input, ctx);
+}
+
+/**
+ * Runs a tool and returns a JSON string for the model. Errors (bad JSON args,
+ * network failures, invalid API responses) are returned to the model as
+ * `{ error }` instead of breaking the conversation.
+ */
+export async function runToolForModel(
+  name: string,
+  rawArgs: string,
+  ctx: ApiContext,
+  logPrefix = "[tool]"
+): Promise<string> {
+  try {
+    const input = (rawArgs ? JSON.parse(rawArgs) : {}) as Record<string, unknown>;
+    console.log(`${logPrefix} ${name}`, Object.keys(input).length ? input : "");
+    const result = await executeTool(name, input, ctx);
+    console.log(`${logPrefix} ${name} → done`);
+    return JSON.stringify(result ?? null);
+  } catch (err) {
+    console.error(`${logPrefix} ${name} → error`, err);
+    return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
+  }
 }
 
 export type { ApiContext };
