@@ -86,7 +86,10 @@ export function buildVoiceInstructions(screenContext: ScreenContext): string {
     ` podaj łączną liczbę i zapytaj, czy wymienić resztę albo zawęzić wyniki.` +
     ` Kwoty wypowiadaj naturalnie (np. "tysiąc dwieście trzydzieści złotych i pięćdziesiąt groszy"),` +
     ` daty jak w mowie (np. "piętnastego listopada"). Numery dokumentów czytaj wyraźnie.` +
-    ` Przyciski akcji pojawiają się na ekranie — jeśli o nich wspominasz, mów "na ekranie poniżej".` +
+    ` Przyciski akcji pojawiają się na ekranie WYŁĄCZNIE wtedy, gdy wywołasz odpowiednie narzędzie` +
+    ` (open_contractor_form, open_income_form, open_invoice itd.). Gdy proponujesz akcję, NAJPIERW wywołaj narzędzie` +
+    ` (actionType 'suggested' lub 'direct'), a dopiero potem o niej mów. Nigdy nie mów o przycisku ani o otwartym` +
+    ` formularzu, jeśli nie wywołałeś narzędzia. O przyciskach mów "na ekranie poniżej".` +
     ` Gdy wywołujesz narzędzie, które może chwilę potrwać, powiedz krótko co robisz (np. "Sprawdzam faktury.").` +
     ` Przed nieodwracalnymi operacjami (wysyłka faktury, przypomnienia, księgowanie, cofnięcie księgowania)` +
     ` potwierdź z użytkownikiem numer dokumentu i adres e-mail, chyba że wyraźnie to już powiedział.`
