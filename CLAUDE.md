@@ -95,3 +95,7 @@ Each tool is a file exporting a default `ToolDefinition` with a `schema` (provid
 | File | Tool name | Opens |
 |---|---|---|
 | `open-contractor-form.ts` | `open_contractor_form` | Contractor add form |
+
+## Git workflow
+
+Single-developer project: commit and push directly to `main` (no feature branches or pull requests needed).
