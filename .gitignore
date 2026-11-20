@@ -1,0 +1,7 @@
+node_modules/
+.idea/
+.claude/
+dist/
+*.js.map
+.env
+.env.local
