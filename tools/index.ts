@@ -28,6 +28,17 @@ import unaccountInvoiceTool from "./unaccount-invoice";
 import sendInvoiceTool from "./send-invoice";
 import sendInvoiceDuplicateTool from "./send-invoice-duplicate";
 import sendInvoiceReminderTool from "./send-invoice-reminder";
+import editIncomeTool from "./edit-income";
+import showStatisticsTool from "./show-statistics";
+import showTasksTool from "./show-tasks";
+import showTaskTool from "./show-task";
+import approveMonthTool from "./approve-month";
+import showContractorsTool from "./show-contractors";
+import showContractorTool from "./show-contractor";
+import editContractorTool from "./edit-contractor";
+import showSequencesTool from "./show-sequences";
+import submitBugReportTool from "./submit-bug-report";
+import showKsefTool from "./show-ksef";
 
 const registry: Record<string, ToolDefinition> = {
   [userInfoTool.schema.name]: userInfoTool,
@@ -57,6 +68,17 @@ const registry: Record<string, ToolDefinition> = {
   [sendInvoiceTool.schema.name]: sendInvoiceTool,
   [sendInvoiceDuplicateTool.schema.name]: sendInvoiceDuplicateTool,
   [sendInvoiceReminderTool.schema.name]: sendInvoiceReminderTool,
+  [editIncomeTool.schema.name]: editIncomeTool,
+  [showStatisticsTool.schema.name]: showStatisticsTool,
+  [showTasksTool.schema.name]: showTasksTool,
+  [showTaskTool.schema.name]: showTaskTool,
+  [approveMonthTool.schema.name]: approveMonthTool,
+  [showContractorsTool.schema.name]: showContractorsTool,
+  [showContractorTool.schema.name]: showContractorTool,
+  [editContractorTool.schema.name]: editContractorTool,
+  [showSequencesTool.schema.name]: showSequencesTool,
+  [submitBugReportTool.schema.name]: submitBugReportTool,
+  [showKsefTool.schema.name]: showKsefTool,
 };
 
 export const toolSchemas: ToolSchema[] = Object.values(registry).map((t) => t.schema);

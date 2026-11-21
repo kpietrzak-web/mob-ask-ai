@@ -1,4 +1,4 @@
-import { apiUrl, type ToolDefinition } from "./types";
+import type { ToolDefinition } from "./types";
 
 const markInvoiceAsAccountedTool: ToolDefinition = {
   schema: {
@@ -16,14 +16,8 @@ const markInvoiceAsAccountedTool: ToolDefinition = {
   },
   async execute(input, ctx) {
     const { id } = input as { id: number };
-    const res = await fetch(`${apiUrl(ctx, "/mark-invoice-as-accounted")}?id=${id}`, {
-      method: "PUT",
-      headers: { Authorization: `Bearer ${ctx.token}` },
-    });
-    const text = await res.text();
-    const result = text ? JSON.parse(text) : { success: res.ok };
-    if (res.ok) ctx.emit({ type: "refresh", entity: "income", id });
-    return result;
+    ctx.emit({ type: "ACCEPT_INVOICE", actionType: "direct", payload: { id } });
+    return { success: true };
   },
 };
 
