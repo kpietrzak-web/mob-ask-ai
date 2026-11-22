@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import type { ResponseFunctionToolCall, ResponseInputItem, ResponseOutputItem } from "openai/resources/responses/responses";
 import type { ReasoningEffort } from "openai/resources/shared";
-import { config, openai } from "./config";
+import { config, openai, Sentry } from "./config";
 import { buildSystemPrompt, parseScreenContext } from "./prompt";
 import { chatTools, runToolForModel } from "./tools";
 import type { ApiContext } from "./tools/types";
@@ -122,7 +122,15 @@ export async function chatHandler(req: Request, res: Response) {
       input.push(...toolResults);
     }
   } catch (err) {
-    if (!abort.signal.aborted) console.error("[error]", err);
+    if (!abort.signal.aborted) {
+      console.error("[error]", err);
+      Sentry.captureException(err, {
+        extra: { apiUrl, screenContext: req.headers["x-screen-context"] },
+      });
+      if (!res.writableEnded) {
+        res.write('event: text\ndata: "Wystąpił błąd podczas przetwarzania. Spróbuj ponownie."\n\n');
+      }
+    }
     res.end();
   }
 }
