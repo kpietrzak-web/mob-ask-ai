@@ -1,7 +1,15 @@
 import OpenAI from "openai";
+import * as Sentry from "@sentry/node";
 
 // Load .env if present (gitignored). Variables already set in the environment win.
 try { process.loadEnvFile(); } catch { /* no .env file */ }
+
+Sentry.init({
+  dsn: process.env.SENTRY_DSN ?? "https://1bee4f2f69d733a16b03194925256048@o4509706346102784.ingest.de.sentry.io/4509728382124112",
+  environment: process.env.NODE_ENV ?? "production",
+});
+
+export { Sentry };
 
 function env(name: string, fallback: string): string {
   const v = process.env[name];

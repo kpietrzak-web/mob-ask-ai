@@ -1,6 +1,7 @@
 import type { FunctionTool } from "openai/resources/responses/responses";
 import type { RealtimeFunctionTool } from "openai/resources/realtime/realtime";
 import type { ApiContext, ToolDefinition, ToolSchema } from "./types";
+import { Sentry } from "../config";
 import userInfoTool from "./user-info";
 import contractorsTool from "./contractors";
 import bankAccountsTool from "./bank-accounts";
@@ -129,7 +130,8 @@ export async function runToolForModel(
     return JSON.stringify(result ?? null);
   } catch (err) {
     console.error(`${logPrefix} ${name} → error`, err);
-    return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
+    Sentry.captureException(err, { extra: { tool: name, args: rawArgs } });
+    return JSON.stringify({ error: "Operacja nie powiodła się. Spróbuj ponownie lub skontaktuj się z supportem." });
   }
 }
 
