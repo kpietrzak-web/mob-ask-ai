@@ -5,6 +5,7 @@ import { config, openai, Sentry } from "./config";
 import { buildSystemPrompt, parseScreenContext } from "./prompt";
 import { chatTools, runToolForModel } from "./tools";
 import type { ApiContext } from "./tools/types";
+import { getAvailableActions, isValidSemver, FALLBACK_VERSION } from "./actionVersioning";
 
 /** Accepts plain strings as well as content-block arrays (`[{ type: "text", text }]`). */
 function contentToText(content: unknown): string {
@@ -30,19 +31,36 @@ export async function chatHandler(req: Request, res: Response) {
   const token = (req.headers.authorization ?? "").replace("Bearer ", "");
   const apiUrl = (req.headers["x-api-url"] as string) ?? "";
   const screenContext = parseScreenContext(req.headers["x-screen-context"] as string | undefined);
+  const rawAppVersion = req.headers["x-app-version"] as string | undefined;
+  const appVersion = isValidSemver(rawAppVersion) ? rawAppVersion! : FALLBACK_VERSION;
+  const availableActions = getAvailableActions(appVersion);
   const sse = {
     text:   (chunk: string) => res.write(`event: text\ndata: ${JSON.stringify(chunk)}\n\n`),
     action: (event: object) => res.write(`event: action\ndata: ${JSON.stringify(event)}\n\n`),
     done:   ()              => res.write(`event: done\ndata: [DONE]\n\n`),
   };
-  const ctx: ApiContext = { token, apiUrl, emit: sse.action };
+  const ctx: ApiContext = { token, apiUrl, emit: (event) => {
+    // Filter outgoing action events to only allowed tools.
+    // "refresh" actions have no tool name restriction — always pass through.
+    const e = event as { type?: string; name?: string };
+    if (e.type !== "refresh" && e.name && !availableActions.has(e.name)) {
+      console.warn(`[version] blocking action '${e.name}' for appVersion=${appVersion}`);
+      return;
+    }
+    sse.action(event);
+  }};
 
   const input = toChatHistory(req.body?.messages);
   const latestUserMessage = input.at(-1) as { content?: unknown } | undefined;
   const screenLog = screenContext.screen
     ? `| screen: ${JSON.stringify(screenContext)}`
     : "";
-  console.log("[user]", latestUserMessage?.content, "| token:", token, "| api:", apiUrl, screenLog);
+  const versionLog = rawAppVersion
+    ? `| version: ${rawAppVersion}${!isValidSemver(rawAppVersion) ? " (invalid, using fallback)" : ""}`
+    : `| version: missing (using fallback ${FALLBACK_VERSION})`;
+  console.log("[user]", latestUserMessage?.content, "| token:", token, "| api:", apiUrl, screenLog, versionLog);
+
+  const versionedChatTools = chatTools.filter((t) => availableActions.has(t.name));
 
   res.setHeader("Content-Type", "text/event-stream");
 
@@ -65,7 +83,7 @@ export async function chatHandler(req: Request, res: Response) {
           model: config.chatModel,
           instructions,
           input,
-          tools: chatTools,
+          tools: versionedChatTools,
           max_output_tokens: config.chatMaxOutputTokens,
           ...(config.chatReasoningEffort
             ? {
