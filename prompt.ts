@@ -86,11 +86,10 @@ export function buildSystemPrompt(screenContext: ScreenContext): string {
     ` Zamiast tego powiedz użytkownikowi, że ma zbyt wiele faktur aby je wszystkie wyświetlić (podaj ile ich jest),` +
     ` i zaproponuj zawężenie przez: podanie kontrahenta, zakresu dat, statusu lub innego filtru.` +
     ` Możesz też zaproponować pokazanie ostatnich N faktur. Nie kontynuuj wyświetlania gdy total > 50 i nie zastosowano filtrów.` +
-    ` Gdy użytkownik chce wystawić fakturę dla konkretnego kontrahenta: najpierw wywołaj get_contractors i sprawdź` +
-    ` czy ten kontrahent istnieje (po nazwie lub NIP). Jeśli kontrahent NIE ISTNIEJE — nie otwieraj formularza` +
-    ` faktury bezpośrednio, lecz wyślij DWIE akcje suggested: najpierw open_contractor_form (suggested) z danymi` +
-    ` kontrahenta, a następnie open_income_form (suggested) z danymi faktury jakie znasz (bez contractorId).` +
-    ` Wyjaśnij użytkownikowi że kontrahent nie został znaleziony i zaproponuj obie akcje.` +
+    ` Gdy użytkownik chce wystawić fakturę: wywołaj NATYCHMIAST narzędzie open_income_form` +
+    ` (actionType: 'direct') z danymi jakie znasz (nazwa linii, kwota, data). NIE pytaj o kontrahenta i NIE szukaj go` +
+    ` wcześniej — użytkownik wypełni kontrahenta sam w formularzu. Jedyny wyjątek: jeśli użytkownik WYRAŹNIE prosi` +
+    ` o wyszukanie lub sprawdzenie kontrahenta z bazy, dopiero wtedy wywołaj get_contractors.` +
     ` Jeśli użytkownik poinformuje o problemie w aplikacji (coś nie działa, błąd, nie może wykonać akcji),` +
     ` natychmiast wywołaj narzędzie submit_bug_report z actionType: "direct" i dodaj krótkie wyjaśnienie.` +
     ` Tak samo jeśli użytkownik zgłosi sugestię lub zapyta o funkcję, której nie ma w aplikacji — wywołaj` +

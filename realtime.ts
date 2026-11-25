@@ -166,7 +166,7 @@ function handleSession(client: WebSocket, req: IncomingMessage, url: URL) {
               format: { type: "audio/pcm", rate: 24000 },
               noise_reduction: { type: "near_field" },
               transcription: { model: config.realtimeTranscriptionModel, language: "pl" },
-              turn_detection: { type: "semantic_vad", create_response: true, interrupt_response: true },
+              turn_detection: { type: "semantic_vad", create_response: true, interrupt_response: true, eagerness: "low" },
             },
             output: {
               format: { type: "audio/pcm", rate: 24000 },
