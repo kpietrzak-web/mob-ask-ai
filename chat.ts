@@ -58,7 +58,7 @@ export async function chatHandler(req: Request, res: Response) {
   const versionLog = rawAppVersion
     ? `| version: ${rawAppVersion}${!isValidSemver(rawAppVersion) ? " (invalid, using fallback)" : ""}`
     : `| version: missing (using fallback ${FALLBACK_VERSION})`;
-  console.log("[user]", latestUserMessage?.content, "| token:", token, "| api:", apiUrl, screenLog, versionLog);
+  console.log("[user]", latestUserMessage?.content, "| api:", apiUrl, screenLog, versionLog);
 
   const versionedChatTools = chatTools.filter((t) => availableActions.has(t.name));
 

@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, Server } from "node:http";
 import { WebSocket, WebSocketServer, type RawData } from "ws";
 import { config } from "./config";
@@ -43,10 +44,39 @@ export function attachRealtime(server: Server) {
 
   server.on("upgrade", (req, socket, head) => {
     const url = new URL(req.url ?? "/", "http://localhost");
+    console.log(`[realtime] upgrade request: ${url.pathname} from ${req.socket.remoteAddress}`);
     if (url.pathname !== REALTIME_PATH) {
+      console.log(`[realtime] rejected upgrade — unknown path: ${url.pathname}`);
       socket.destroy();
       return;
     }
+
+    // Validate APP_KEY (timing-safe).
+    const appKey = process.env.APP_KEY ?? "";
+    const receivedKey = header(req, "x-app-key") ?? "";
+    const keyValid =
+      appKey.length > 0 &&
+      receivedKey.length === appKey.length &&
+      timingSafeEqual(Buffer.from(receivedKey), Buffer.from(appKey));
+    if (!keyValid) {
+      console.log(`[realtime] rejected upgrade — invalid x-app-key`);
+      socket.write("HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\n\r\n");
+      socket.destroy();
+      return;
+    }
+
+    // Validate that an auth token is present.
+    const authHeader = header(req, "authorization") ?? "";
+    const tokenFromQuery = url.searchParams.get("token") ?? "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : tokenFromQuery.trim();
+    if (!token) {
+      console.log(`[realtime] rejected upgrade — missing authorization token`);
+      socket.write("HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\n\r\n");
+      socket.destroy();
+      return;
+    }
+
+    console.log(`[realtime] accepting WebSocket upgrade`);
     wss.handleUpgrade(req, socket, head, (ws) => handleSession(ws, req, url));
   });
 }
@@ -99,6 +129,7 @@ function handleSession(client: WebSocket, req: IncomingMessage, url: URL) {
   // ---------- OpenAI → app ----------
 
   upstream.on("open", () => {
+    console.log(`${tag} upstream (OpenAI) connected — sending session.update`);
     upstream.send(JSON.stringify({
       type: "session.update",
       session: {
@@ -186,6 +217,7 @@ function handleSession(client: WebSocket, req: IncomingMessage, url: URL) {
   client.on("message", (data: RawData, isBinary: boolean) => {
     if (isBinary) {
       const buf = Array.isArray(data) ? Buffer.concat(data) : Buffer.from(data as ArrayBuffer);
+      console.log(`${tag} audio frame received — ${buf.byteLength} bytes`);
       sendUpstream({ type: "input_audio_buffer.append", audio: buf.toString("base64") });
       return;
     }
