@@ -40,7 +40,7 @@ export function buildScreenContext(ctx: ScreenContext): string {
       break;
     case "filters_incomes_list": {
       lines.push("Użytkownik wpisuje zapytanie filtrujące listę przychodów (faktur sprzedażowych).");
-      lines.push("Twoim JEDYNYM zadaniem jest wywołanie narzędzia set_filters z filtrType='incomes' i wartościami filtrów wynikającymi z zapytania.");
+      lines.push("Twoim JEDYNYM zadaniem jest wywołanie narzędzia set_filters z filterType='incomes' i wartościami filtrów wynikającymi z zapytania.");
       lines.push("Odpowiedz krótko po polsku, potwierdzając jakie filtry ustawiasz.");
       const def = getFilterDefinition("filters_incomes_list");
       if (def) lines.push(buildFilterDescription(def));
