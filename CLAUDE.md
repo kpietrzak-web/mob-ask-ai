@@ -99,3 +99,24 @@ Each tool is a file exporting a default `ToolDefinition` with a `schema` (provid
 ## Git workflow
 
 Single-developer project: commit and push directly to `main` (no feature branches or pull requests needed).
+
+## Filter synchronization (AI filters feature)
+
+The `filterDefinitions.ts` file is the single source of truth for filter schemas exposed to the AI.
+It MUST stay in sync with the mobile app:
+
+- Mobile app types: `scanner/ios/src/modules/GridFilters/types.ts`
+- Mobile app filter defs: `scanner/ios/src/modules/GridFilters/filterDefinitions.ts`
+- Mobile app intent types: `scanner/ios/src/intents/types.ts` (SetFiltersPayload)
+- Mobile app parser: `scanner/ios/src/intents/parsers/aiChat.ts` (SET_FILTERS case)
+
+**When adding a new filter field:**
+1. Add it to `filterDefinitions.ts` for the appropriate screen.
+2. Add it as a parameter to `tools/set-filters.ts` input schema.
+3. Update `actionVersioning.ts` if the minimum version changes.
+4. Update the corresponding `*Filters` interface in the mobile app.
+5. Update the `SetFiltersPayload` type in the mobile app.
+
+**When bumping SET_FILTERS to a new app version:**
+Update `set_filters` min version in `actionVersioning.ts`.
+Old app versions that don't handle `SET_FILTERS` will not receive it (version gate).

@@ -1,3 +1,5 @@
+import { buildFilterDescription, getFilterDefinition } from "./filterDefinitions";
+
 export type ScreenContext = Record<string, unknown>;
 
 export function parseScreenContext(raw: string | undefined | null): ScreenContext {
@@ -36,6 +38,22 @@ export function buildScreenContext(ctx: ScreenContext): string {
       lines.push(`Użytkownik aktualnie przegląda kontrahenta o ID ${ctx.contractorId}${ctx.contractorName ? ` (nazwa: ${ctx.contractorName})` : ""}.`);
       lines.push("Gdy użytkownik mówi 'ten kontrahent', 'temu kontrahentowi' itp. — chodzi właśnie o tego kontrahenta.");
       break;
+    case "filters_incomes_list": {
+      lines.push("Użytkownik wpisuje zapytanie filtrujące listę przychodów (faktur sprzedażowych).");
+      lines.push("Twoim JEDYNYM zadaniem jest wywołanie narzędzia set_filters z filtrType='incomes' i wartościami filtrów wynikającymi z zapytania.");
+      lines.push("Odpowiedz krótko po polsku, potwierdzając jakie filtry ustawiasz.");
+      const def = getFilterDefinition("filters_incomes_list");
+      if (def) lines.push(buildFilterDescription(def));
+      break;
+    }
+    case "filters_expenses_list": {
+      lines.push("Użytkownik wpisuje zapytanie filtrujące listę kosztów.");
+      lines.push("Twoim JEDYNYM zadaniem jest wywołanie narzędzia set_filters z filterType='expenses' i wartościami filtrów wynikającymi z zapytania.");
+      lines.push("Odpowiedz krótko po polsku, potwierdzając jakie filtry ustawiasz.");
+      const def = getFilterDefinition("filters_expenses_list");
+      if (def) lines.push(buildFilterDescription(def));
+      break;
+    }
     default:
       lines.push(`Użytkownik aktualnie jest na ekranie: ${ctx.screen}.`);
   }

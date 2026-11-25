@@ -92,6 +92,10 @@ function handleSession(client: WebSocket, req: IncomingMessage, url: URL) {
     header(req, "x-screen-context") ?? url.searchParams.get("screenContext")
   );
 
+  // X-Voice-Mode: search — transcription-only mode for search bar voice input.
+  // No AI response is generated; transcription text is forwarded via mob.transcript.
+  const isSearchMode = header(req, "x-voice-mode") === "search";
+
   const tag = `[voice ${token.slice(-6) || "anon"}]`;
   console.log(`${tag} connected | api: ${apiUrl}`, screenContext.screen ? `| screen: ${JSON.stringify(screenContext)}` : "");
 
@@ -129,29 +133,52 @@ function handleSession(client: WebSocket, req: IncomingMessage, url: URL) {
   // ---------- OpenAI → app ----------
 
   upstream.on("open", () => {
-    console.log(`${tag} upstream (OpenAI) connected — sending session.update`);
-    upstream.send(JSON.stringify({
-      type: "session.update",
-      session: {
-        type: "realtime",
-        instructions: buildVoiceInstructions(screenContext),
-        output_modalities: ["audio"],
-        audio: {
-          input: {
-            format: { type: "audio/pcm", rate: 24000 },
-            noise_reduction: { type: "near_field" },
-            transcription: { model: config.realtimeTranscriptionModel, language: "pl" },
-            turn_detection: { type: "semantic_vad", create_response: true, interrupt_response: true },
+    console.log(`${tag} upstream (OpenAI) connected — sending session.update (mode: ${isSearchMode ? "search/transcribe" : "voice"})`);
+
+    if (isSearchMode) {
+      // Transcription-only mode: no AI response, no tools — just speech-to-text.
+      upstream.send(JSON.stringify({
+        type: "session.update",
+        session: {
+          type: "realtime",
+          output_modalities: [],
+          audio: {
+            input: {
+              format: { type: "audio/pcm", rate: 24000 },
+              noise_reduction: { type: "near_field" },
+              transcription: { model: config.realtimeTranscriptionModel, language: "pl" },
+              turn_detection: { type: "server_vad", create_response: false },
+            },
           },
-          output: {
-            format: { type: "audio/pcm", rate: 24000 },
-            voice: config.realtimeVoice,
-          },
+          tools: [],
+          tool_choice: "none",
         },
-        tools: realtimeTools,
-        tool_choice: "auto",
-      },
-    }));
+      }));
+    } else {
+      upstream.send(JSON.stringify({
+        type: "session.update",
+        session: {
+          type: "realtime",
+          instructions: buildVoiceInstructions(screenContext),
+          output_modalities: ["audio"],
+          audio: {
+            input: {
+              format: { type: "audio/pcm", rate: 24000 },
+              noise_reduction: { type: "near_field" },
+              transcription: { model: config.realtimeTranscriptionModel, language: "pl" },
+              turn_detection: { type: "semantic_vad", create_response: true, interrupt_response: true },
+            },
+            output: {
+              format: { type: "audio/pcm", rate: 24000 },
+              voice: config.realtimeVoice,
+            },
+          },
+          tools: realtimeTools,
+          tool_choice: "auto",
+        },
+      }));
+    }
+
     for (const data of pending.splice(0)) upstream.send(data);
   });
 
@@ -166,12 +193,16 @@ function handleSession(client: WebSocket, req: IncomingMessage, url: URL) {
     switch (event.type) {
       case "conversation.item.input_audio_transcription.completed":
         console.log(`${tag} [user]`, event.transcript);
+        // In search mode, forward the transcript to the app as mob.transcript.
+        if (isSearchMode && event.transcript) {
+          sendClient({ type: "mob.transcript", text: event.transcript });
+        }
         break;
       case "response.output_audio_transcript.done":
         console.log(`${tag} [agent]`, event.transcript);
         break;
       case "response.done":
-        void handleResponseDone(event.response);
+        if (!isSearchMode) void handleResponseDone(event.response);
         break;
       case "error":
         console.error(`${tag} [openai error]`, event.error);

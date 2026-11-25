@@ -42,6 +42,11 @@ export const CHAT_ACTIONS_MIN_VERSION: Record<string, string> = {
   show_ksef:                    "1.0.0",
   submit_bug_report:            "1.0.0",
 
+  // --- filter actions (SET_FILTERS — requires app >= 1.51.0 to handle the action) ---
+  // UWAGA: wersja minimalna jest powiązana z obsługą IntentType.SET_FILTERS w aplikacji.
+  // Przy zmianie minVersion zaktualizuj też: scanner/ios/src/intents/types.ts
+  set_filters:                  "1.51.0",
+
   // --- mutating actions (require a minimum version for safety) ---
   // TODO: set accurate minimum versions once known from release history
   download_income_pdf:          "1.0.0",

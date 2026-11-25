@@ -40,6 +40,7 @@ import editContractorTool from "./edit-contractor";
 import showSequencesTool from "./show-sequences";
 import submitBugReportTool from "./submit-bug-report";
 import showKsefTool from "./show-ksef";
+import setFiltersTool from "./set-filters";
 
 const registry: Record<string, ToolDefinition> = {
   [userInfoTool.schema.name]: userInfoTool,
@@ -80,6 +81,9 @@ const registry: Record<string, ToolDefinition> = {
   [showSequencesTool.schema.name]: showSequencesTool,
   [submitBugReportTool.schema.name]: submitBugReportTool,
   [showKsefTool.schema.name]: showKsefTool,
+  // UWAGA: dodanie nowego narzędzia wymaga aktualizacji actionVersioning.ts (minVersion)
+  // i synchronizacji z aplikacją mobilną: scanner/ios/src/intents/types.ts
+  [setFiltersTool.schema.name]: setFiltersTool,
 };
 
 export const toolSchemas: ToolSchema[] = Object.values(registry).map((t) => t.schema);

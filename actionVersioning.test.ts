@@ -125,10 +125,13 @@ describe("getAvailableActions — baseline", () => {
     assert.ok(actions.size > 0, "Expected at least one action");
   });
 
-  it("includes all tools registered in CHAT_ACTIONS_MIN_VERSION for 1.0.0", () => {
+  it("includes all tools with minVersion <= 1.0.0 for version 1.0.0", () => {
     const actions = getAvailableActions("1.0.0");
-    for (const name of Object.keys(CHAT_ACTIONS_MIN_VERSION)) {
-      assert.ok(actions.has(name), `Expected tool '${name}' to be available at 1.0.0`);
+    for (const [name, minVersion] of Object.entries(CHAT_ACTIONS_MIN_VERSION)) {
+      const { compareSemver: cmp } = require("./actionVersioning") as typeof import("./actionVersioning");
+      if (cmp("1.0.0", minVersion) >= 0) {
+        assert.ok(actions.has(name), `Expected tool '${name}' to be available at 1.0.0`);
+      }
     }
   });
 });
