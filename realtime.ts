@@ -88,6 +88,7 @@ function handleSession(client: WebSocket, req: IncomingMessage, url: URL) {
   const token =
     (header(req, "authorization") ?? "").replace("Bearer ", "") || url.searchParams.get("token") || "";
   const apiUrl = header(req, "x-api-url") ?? url.searchParams.get("apiUrl") ?? "";
+  const userEmail = header(req, "x-user-email") ?? "";
   let screenContext: ScreenContext = parseScreenContext(
     header(req, "x-screen-context") ?? url.searchParams.get("screenContext")
   );
@@ -97,7 +98,7 @@ function handleSession(client: WebSocket, req: IncomingMessage, url: URL) {
   const isSearchMode = header(req, "x-voice-mode") === "search";
 
   const tag = `[voice ${token.slice(-6) || "anon"}]`;
-  console.log(`${tag} connected | api: ${apiUrl}`, screenContext.screen ? `| screen: ${JSON.stringify(screenContext)}` : "");
+  console.log(`${tag} connected | email: ${userEmail || "unknown"} | api: ${apiUrl}`, screenContext.screen ? `| screen: ${JSON.stringify(screenContext)}` : "");
 
   const sendClient = (event: object) => {
     if (client.readyState === WebSocket.OPEN) client.send(JSON.stringify(event));
@@ -223,6 +224,7 @@ function handleSession(client: WebSocket, req: IncomingMessage, url: URL) {
     await Promise.all(calls.map(async (call) => {
       sendClient({ type: "mob.tool", name: call.name, status: "started" });
       const output = await runToolForModel(call.name, call.arguments ?? "", ctx, `${tag} [tool]`);
+      console.log(`${tag} [tool] ${call.name} result:`, JSON.stringify(output).slice(0, 400));
       sendClient({ type: "mob.tool", name: call.name, status: "done" });
       sendUpstream({
         type: "conversation.item.create",
