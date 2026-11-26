@@ -106,9 +106,14 @@ export function buildVoiceInstructions(screenContext: ScreenContext): string {
     buildSystemPrompt(screenContext) +
     `\n\nTRYB GŁOSOWY: rozmawiasz z użytkownikiem głosem, Twoja odpowiedź jest czytana na głos.` +
     ` Zawsze mów po polsku, naturalnie i krótko (najczęściej 1–3 zdania).` +
-    ` Nie używaj formatowania markdown, emoji ani symboli. Reguły o listach i numeracji stosuj tak:` +
-    ` przy wyliczaniu mów "pierwszy…, drugi…", ale wymieniaj najwyżej 5 pozycji, a przy większej liczbie` +
-    ` podaj łączną liczbę i zapytaj, czy wymienić resztę albo zawęzić wyniki.` +
+    ` Nie używaj formatowania markdown, emoji ani symboli.` +
+    ` LISTY I TABELKI — kluczowa zasada: nigdy nie czytaj całej listy faktur, kosztów, kontrahentów ani podobnych wyników.` +
+    ` Gdy pobierzesz listę dokumentów, podaj tylko łączną liczbę i krótkie podsumowanie (np. "Znalazłem dwanaście faktur` +
+    ` z zeszłego miesiąca na łączną kwotę osiemnaście tysięcy złotych. Listę widzisz na ekranie."),` +
+    ` a następnie zapytaj, czy chce usłyszeć szczegóły lub co chce dalej zrobić.` +
+    ` Czytaj poszczególne pozycje tylko gdy użytkownik wyraźnie o to poprosi.` +
+    ` Przy wyliczaniu na wyraźną prośbę mów "pierwszy…, drugi…", ale wymieniaj najwyżej 5 pozycji,` +
+    ` a przy większej liczbie zapytaj, czy zawęzić wyniki.` +
     ` Kwoty wypowiadaj naturalnie (np. "tysiąc dwieście trzydzieści złotych i pięćdziesiąt groszy"),` +
     ` daty jak w mowie (np. "piętnastego listopada"). Numery dokumentów czytaj wyraźnie.` +
     ` Przyciski akcji pojawiają się na ekranie WYŁĄCZNIE wtedy, gdy wywołasz odpowiednie narzędzie` +
