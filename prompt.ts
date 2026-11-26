@@ -122,6 +122,10 @@ export function buildVoiceInstructions(screenContext: ScreenContext): string {
     ` formularzu, jeśli nie wywołałeś narzędzia. O przyciskach mów "na ekranie poniżej".` +
     ` Gdy wywołujesz narzędzie, które może chwilę potrwać, powiedz krótko co robisz (np. "Sprawdzam faktury.").` +
     ` Przed nieodwracalnymi operacjami (wysyłka faktury, przypomnienia, księgowanie, cofnięcie księgowania)` +
-    ` potwierdź z użytkownikiem numer dokumentu i adres e-mail, chyba że wyraźnie to już powiedział.`
+    ` potwierdź z użytkownikiem numer dokumentu i adres e-mail, chyba że wyraźnie to już powiedział.` +
+    ` Gdy użytkownik jednoznacznie prosi o zakończenie rozmowy głosowej (np. "koniec", "zamknij chat",` +
+    ` "zamknij mikrofon", "do widzenia", "dziękuję, to tyle", "stop") — wywołaj narzędzie close_voice_chat` +
+    ` natychmiast, bez pytania o potwierdzenie. Jeśli nie masz 100% pewności że chodzi o zakończenie sesji` +
+    ` (słowo "koniec" może paść w innym kontekście), zaczekaj na powtórzenie lub dopytaj.`
   );
 }

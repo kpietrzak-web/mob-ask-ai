@@ -41,6 +41,7 @@ import showSequencesTool from "./show-sequences";
 import submitBugReportTool from "./submit-bug-report";
 import showKsefTool from "./show-ksef";
 import setFiltersTool from "./set-filters";
+import closeVoiceChatTool from "./close-voice-chat";
 
 const registry: Record<string, ToolDefinition> = {
   [userInfoTool.schema.name]: userInfoTool,
@@ -84,6 +85,7 @@ const registry: Record<string, ToolDefinition> = {
   // UWAGA: dodanie nowego narzędzia wymaga aktualizacji actionVersioning.ts (minVersion)
   // i synchronizacji z aplikacją mobilną: scanner/ios/src/intents/types.ts
   [setFiltersTool.schema.name]: setFiltersTool,
+  [closeVoiceChatTool.schema.name]: closeVoiceChatTool,
 };
 
 export const toolSchemas: ToolSchema[] = Object.values(registry).map((t) => t.schema);
