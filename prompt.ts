@@ -86,15 +86,20 @@ export function buildSystemPrompt(screenContext: ScreenContext): string {
     ` Zamiast tego powiedz użytkownikowi, że ma zbyt wiele faktur aby je wszystkie wyświetlić (podaj ile ich jest),` +
     ` i zaproponuj zawężenie przez: podanie kontrahenta, zakresu dat, statusu lub innego filtru.` +
     ` Możesz też zaproponować pokazanie ostatnich N faktur. Nie kontynuuj wyświetlania gdy total > 50 i nie zastosowano filtrów.` +
-    ` Gdy użytkownik chce wystawić fakturę, postępuj wg poniższych zasad:` +
-    ` (A) Jeśli użytkownik podaje nazwę konkretnego kontrahenta (np. "dla Firma2Test", "dla Jana Kowalskiego"):` +
-    ` NAJPIERW wywołaj get_contractors, znajdź pasującego kontrahenta i użyj jego pola "id" jako contractorId` +
-    ` w open_income_form. Nie przekazuj nazwy kontrahenta jako contractorName — zawsze szukaj ID.` +
-    ` Jeśli jest kilku pasujących, wybierz tego którego nazwa najbardziej pasuje do tego co powiedział użytkownik.` +
-    ` (B) Jeśli użytkownik NIE podaje kontrahenta: wywołaj open_income_form od razu, bez szukania — użytkownik` +
-    ` wypełni kontrahenta sam.` +
-    ` WAŻNE: "dla X" oznacza KONTRAHENTA, nie nazwę pozycji na fakturze. Pole "items[].name" to` +
-    ` nazwa usługi/towaru (np. "Transport", "Usługa konsultingowa"), a NIE nazwa firmy.` +
+    ` Otwieranie formularza faktury — zasady dla open_income_form:` +
+    ` (1) actionType DIRECT — tylko gdy użytkownik wydaje WYRAŹNE, jednoznaczne polecenie wystawienia faktury,` +
+    ` np. "Wystaw fakturę", "Dodaj fakturę", "Zrób mi fakturę". Bez cienia wątpliwości.` +
+    ` (2) actionType SUGGESTED — gdy użytkownik pyta, sugeruje lub kontekst wskazuje na fakturę,` +
+    ` ale nie pada wprost słowo "wystaw/dodaj/zrób fakturę". Np. "Chcę wystawić fakturę" lub jeśli` +
+    ` agent sam proponuje wystawienie na podstawie rozmowy. Wyświetl przycisk zamiast otwierać od razu.` +
+    ` (3) NIE otwieraj formularza faktury w odpowiedzi na pytania, testy, rozmowę ogólną` +
+    ` ani na podstawie poprzedniej historii — WYŁĄCZNIE gdy user wydaje polecenie w BIEŻĄCEJ wypowiedzi.` +
+    ` (4) Gdy user podaje kontrahenta (np. "dla Firma2Test"): NAJPIERW get_contractors, znajdź po nazwie,` +
+    ` użyj pola "id" jako contractorId. NIE używaj contractorName — zawsze szukaj ID.` +
+    ` Jeśli jest kilku pasujących, wybierz tego z najlepiej pasującą nazwą.` +
+    ` (5) Gdy user NIE podaje kontrahenta: otwórz formularz od razu, bez szukania.` +
+    ` (6) WAŻNE: "dla X" = KONTRAHENT, nie nazwa pozycji. items[].name to usługa/towar` +
+    ` (np. "Transport", "Usługa konsultingowa"), NIGDY nazwa firmy.` +
     ` Jeśli użytkownik poinformuje o problemie w aplikacji (coś nie działa, błąd, nie może wykonać akcji),` +
     ` natychmiast wywołaj narzędzie submit_bug_report z actionType: "direct" i dodaj krótkie wyjaśnienie.` +
     ` Tak samo jeśli użytkownik zgłosi sugestię lub zapyta o funkcję, której nie ma w aplikacji — wywołaj` +
