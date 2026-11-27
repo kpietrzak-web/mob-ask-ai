@@ -69,8 +69,24 @@ export interface InvoiceTotals {
   gross: number;
 }
 
-export function computeTotals(items: ComputedInvoiceItem[]): InvoiceTotals {
-  const net = round2(items.reduce((a, i) => a + i.net, 0));
+export function computeTotals(items: ComputedInvoiceItem[], calculationType: CalculationType): InvoiceTotals {
   const gross = round2(items.reduce((a, i) => a + i.gross, 0));
+
+  if (calculationType === "N") {
+    const net = round2(items.reduce((a, i) => a + i.net, 0));
+    return { net, vat: round2(gross - net), gross };
+  }
+
+  // Gross mode: group gross by tax rate, derive net per rate, then sum — mirrors
+  // the app's calculateTotalNet (so the displayed total net matches the form).
+  const grossByRate = new Map<number, number>();
+  for (const i of items) {
+    grossByRate.set(i.taxRate, round2((grossByRate.get(i.taxRate) ?? 0) + i.gross));
+  }
+  let net = 0;
+  for (const [rate, grossSum] of grossByRate) {
+    net += rate <= 0 ? grossSum : round2(grossSum / (rate / 100 + 1));
+  }
+  net = round2(net);
   return { net, vat: round2(gross - net), gross };
 }

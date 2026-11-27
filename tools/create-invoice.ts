@@ -149,7 +149,7 @@ const createInvoiceTool: ToolDefinition = {
         unit: it.unit as string | undefined,
       } as InvoiceItemInput)
     );
-    const totals = computeTotals(items);
+    const totals = computeTotals(items, calculationType);
 
     const issueDate = (data.issueDate as string) || today();
     const saleDate = (data.saleDate as string) || issueDate;
