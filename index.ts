@@ -2,6 +2,7 @@ import express from "express";
 import rateLimit from "express-rate-limit";
 import { config } from "./config";
 import { chatHandler } from "./chat";
+import { greetingHandler } from "./greeting";
 import { attachRealtime } from "./realtime";
 import { authMiddleware } from "./middleware/auth";
 import { initUsageLogger, shutdownUsageLogger } from "./usage";
@@ -24,6 +25,9 @@ app.use(
 app.post("/chat", authMiddleware, chatHandler);
 
 app.delete("/chat", (_req, res) => res.sendStatus(204));
+
+// Proactive personalised greeting prepared in the background before the user opens the chat.
+app.post("/greeting", authMiddleware, greetingHandler);
 
 const server = app.listen(config.port);
 attachRealtime(server);

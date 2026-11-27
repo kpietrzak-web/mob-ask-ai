@@ -9,7 +9,7 @@
  * No message content, tool arguments or PII is ever stored here.
  */
 
-export type UsageChannel = "chat" | "voice" | "voice_transcribe";
+export type UsageChannel = "chat" | "voice" | "voice_transcribe" | "greeting";
 
 export interface UsageEvent {
   /** `chat` | `voice` | `voice_transcribe`. */

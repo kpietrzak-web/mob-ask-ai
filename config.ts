@@ -38,6 +38,24 @@ export const config = {
   /** Includes reasoning tokens on reasoning models, so it is higher than the old 1024. */
   chatMaxOutputTokens: Number(env("OPENAI_CHAT_MAX_OUTPUT_TOKENS", "4096")),
 
+  /**
+   * Proactive greeting (`POST /greeting`). A one-shot generation that analyses the
+   * user's data with a narrow read-only toolset and returns a short personalised
+   * greeting plus up to N suggested actions. Tuned for low token cost.
+   */
+  greeting: {
+    /** Cap on model output tokens per iteration (kept small — the greeting is short). */
+    maxOutputTokens: Number(env("OPENAI_GREETING_MAX_OUTPUT_TOKENS", "700")),
+    /** Reasoning effort; "minimal" keeps cost down. Set to "" to omit the parameter. */
+    reasoningEffort: process.env.OPENAI_GREETING_REASONING_EFFORT ?? "minimal",
+    /** Hard cap on agentic-loop iterations — bounds the number of model calls. */
+    maxIterations: Number(env("OPENAI_GREETING_MAX_ITERATIONS", "4")),
+    /** Maximum number of suggested actions returned to the app. */
+    maxSuggestions: Number(env("OPENAI_GREETING_MAX_SUGGESTIONS", "3")),
+    /** How many months back the model is told to look when detecting recurring invoices. */
+    invoiceLookbackMonths: Number(env("OPENAI_GREETING_INVOICE_LOOKBACK_MONTHS", "6")),
+  },
+
   /** Realtime voice (`/realtime`). */
   realtimeModel: env("OPENAI_REALTIME_MODEL", "gpt-realtime"),
   realtimeVoice: env("OPENAI_REALTIME_VOICE", "marin"),
