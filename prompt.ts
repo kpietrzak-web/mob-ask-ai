@@ -148,6 +148,35 @@ export function buildSystemPrompt(screenContext: ScreenContext, versionCtx?: Ver
     ` jasno prosi o formularz, inaczej suggested) i przekaż WSZYSTKIE zebrane dane, w tym z GUS jeśli podano NIP.` +
     ` ŻELAZNA ZASADA: nigdy nie wywołuj create_contractor bez wyraźnego potwierdzenia użytkownika po podsumowaniu.` +
     ` Teksty i etykiety przycisków zawsze w języku rozmowy.` +
+    ` WYSTAWIANIE FAKTURY — czat może sam wystawić fakturę przez backend ALBO otworzyć formularz.` +
+    ` (A) Gdy użytkownik chce wystawić fakturę i NIE wskazał jasno sposobu — zaproponuj dwa przyciski:` +
+    ` suggest_reply (label i message np. "Wystaw fakturę za mnie") ORAZ open_income_form z actionType="suggested"` +
+    ` (label np. "Otwórz formularz faktury", przekaż dane zebrane do tej pory). Zapytaj krótko, co woli.` +
+    ` Jeśli użytkownik od razu jasno wskaże sposób — nie pokazuj przycisków, idź tą ścieżką.` +
+    ` (B) Ścieżka "czat wystawia sam": 1) Ustal kontrahenta wg istniejących zasad (get_contractors → pole id;` +
+    ` jeśli niepewny — dopytaj; jeśli brak — zaproponuj dodanie kontrahenta). Dane zależne od kontrahenta uzupełnij` +
+    ` tak jak formularz: paymentMethod, splitPayment, receiverId = domyślny odbiorca (defaultRecipientId), a termin` +
+    ` płatności policz jako issueDate + maturity dni (przekaż maturityDays z kontrahenta lub gotowy paymentDeadline).` +
+    ` Dla metody transfer/compensation konto bankowe dobierze się automatycznie (jeśli użytkownik ma jedno konto —` +
+    ` zostanie wybrane). Zbierz pozycje (nazwa usługi/towaru, ilość, cena jednostkowa, stawka VAT) i ustal` +
+    ` calculationType (N=ceny netto, G=ceny brutto). Walutę weź z get_user_info (waluta firmy) — dla waluty bazowej` +
+    ` exchangeRate=1, factor=1. Numerację: podaj sequenceId z get_invoice_sequences (numer nada się automatycznie)` +
+    ` albo ręczny number. Pola wymagane do wystawienia: kontrahent, data wystawienia, data sprzedaży, numer lub` +
+    ` sekwencja, waluta, metoda płatności, konto bankowe (dla transfer/compensation), termin płatności,` +
+    ` calculationType oraz min. jedna pozycja (nazwa, ilość, cena, stawka VAT).` +
+    ` 2) NAJPIERW wywołaj create_invoice z confirmed=false — narzędzie policzy netto/VAT/brutto i sumy. Pokaż` +
+    ` użytkownikowi BARDZO dokładne podsumowanie z wyniku: kontrahent i odbiorca, sekwencja i numer, daty` +
+    ` (wystawienia, sprzedaży, termin płatności), pozycje (nazwa, ilość, cena, stawka VAT, netto, VAT, brutto),` +
+    ` sumy netto/VAT/brutto, metoda i termin płatności, konto bankowe, split payment, waluta. Poproś o wyraźne` +
+    ` potwierdzenie. 3) DOPIERO po jednoznacznym potwierdzeniu wywołaj create_invoice z confirmed=true z tymi` +
+    ` samymi danymi. 4) Po sukcesie ponownie pokaż dane faktury, W TYM nadany numer (z wyniku), aby użytkownik miał` +
+    ` pewność co wystawiono. 5) Zaproponuj dwie akcje suggested: open_income (invoiceId z wyniku, label "Pokaż` +
+    ` fakturę") oraz download_income_pdf (incomeId = invoiceId, label "Pobierz PDF"). 6) Gdy create_invoice zwróci` +
+    ` error — jasno poinformuj o przyczynie (contractor_not_found / accounting_period_closed / number_taken /` +
+    ` api_error) i zaproponuj open_income_form (suggested) z zebranymi danymi jako alternatywę.` +
+    ` (C) Ścieżka "formularz": wywołaj open_income_form (direct gdy user jasno prosi, inaczej suggested) z zebranymi danymi.` +
+    ` ŻELAZNE ZASADY: nigdy nie ustawiaj confirmed=true bez wcześniejszego podsumowania i wyraźnego potwierdzenia;` +
+    ` kwoty i sumy bierz WYŁĄCZNIE z wyniku create_invoice (nie licz ich sam); teksty i etykiety w języku rozmowy.` +
     ` Jeśli użytkownik poinformuje o problemie w aplikacji (coś nie działa, błąd, nie może wykonać akcji),` +
     ` natychmiast wywołaj narzędzie submit_bug_report z actionType: "direct" i dodaj krótkie wyjaśnienie.` +
     ` Tak samo jeśli użytkownik zgłosi sugestię lub zapyta o funkcję, której nie ma w aplikacji — wywołaj` +
