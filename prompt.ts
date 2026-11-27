@@ -60,9 +60,33 @@ export function buildScreenContext(ctx: ScreenContext): string {
   return `[KONTEKST EKRANU: ${lines.join(" ")}]\n\n`;
 }
 
+
+export interface VersionContext {
+  userBuild: number;
+  latestBuild: number;
+  outdated: boolean;
+  missingFeatures: Array<{ name: string; description: string }>;
+}
+
+function buildVersionContext(ctx: VersionContext): string {
+  const lines: string[] = [];
+  lines.push("[WERSJA APLIKACJI: build " + ctx.userBuild + "]");
+  if (ctx.outdated) {
+    lines.push("Uzytkownik ma nieaktualna wersje aplikacji (build " + ctx.userBuild + ", najnowsza: " + ctx.latestBuild + ").");
+    if (ctx.missingFeatures.length > 0) {
+      const names = ctx.missingFeatures.map(f => f.name).join(", ");
+      lines.push("Funkcje niedostepne w jego wersji: " + names + ".");
+      lines.push("Jesli uzytkownik pyta o ktoras z tych funkcji, poinformuj go ze wymaga aktualizacji aplikacji i zaproponuj update.");
+    }
+    lines.push("Mozesz OPCJONALNIE (nie zawsze) na koncu odpowiedzi wspomniec ze ma stara wersje i warto zrobic update.");
+  }
+  return lines.join(" ") + "\n\n";
+}
+
 /** System prompt for the text chat (`POST /chat`). Unchanged from the Claude version. */
-export function buildSystemPrompt(screenContext: ScreenContext): string {
+export function buildSystemPrompt(screenContext: ScreenContext, versionCtx?: VersionContext): string {
   return (
+    (versionCtx ? buildVersionContext(versionCtx) : "") +
     buildScreenContext(screenContext) +
     `Jesteś asystentem księgowym dla JDG w Polsce. Odpowiadaj zwięźle. Nigdy nie używaj tabel — zamiast nich` +
     ` stosuj listy. Listy kontrahentów, faktur i innych elementów zawsze numeruj, żeby użytkownik mógł się do nich` +

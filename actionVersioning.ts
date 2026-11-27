@@ -1,137 +1,116 @@
 /**
  * Action versioning — controls which tools are exposed to the model
- * based on the app version reported by the client.
+ * based on the app build code reported by the client via X-App-Version.
  *
- * When no version is provided by the client we fall back to
- * FALLBACK_VERSION, which enables only the most basic set of actions
- * (data-read tools that have always been present).
+ * Build codes are integers (e.g. 150063). When no build code is provided
+ * the client falls back to FALLBACK_BUILD, enabling only the most basic tools.
  */
 
-/** Minimum semver required to unlock each action tool. */
-export const CHAT_ACTIONS_MIN_VERSION: Record<string, string> = {
-  // --- data-read tools (available since the beginning) ---
-  get_user_info:                "1.0.0",
-  get_contractors:              "1.0.0",
-  get_bank_accounts:            "1.0.0",
-  get_invoices:                 "1.0.0",
-  get_invoice_templates:        "1.0.0",
-  get_invoice_sending_history:  "1.0.0",
-  get_expenses:                 "1.0.0",
-  get_invoices_summary:         "1.0.0",
-  get_statistics:               "1.0.0",
-  get_document_topics:          "1.0.0",
-  get_invoice_sequences:        "1.0.0",
-  get_ksef_statistics:          "1.0.0",
-  get_settings:                 "1.0.0",
-  get_dashboard:                "1.0.0",
-  get_close_month_status:       "1.0.0",
-  get_referral:                 "1.0.0",
-  get_referral_invitations:     "1.0.0",
-  refresh:                      "1.0.0",
+/** Latest known production build code — used to detect outdated clients. */
+export const LATEST_BUILD = 150063;
+
+/** Minimum build code required to unlock each action tool (0 = always available). */
+export const CHAT_ACTIONS_MIN_BUILD: Record<string, number> = {
+  // --- data-read tools (available from the beginning) ---
+  get_user_info:                0,
+  get_contractors:              0,
+  get_bank_accounts:            0,
+  get_invoices:                 0,
+  get_invoice_templates:        0,
+  get_invoice_sending_history:  0,
+  get_expenses:                 0,
+  get_invoices_summary:         0,
+  get_statistics:               0,
+  get_document_topics:          0,
+  get_invoice_sequences:        0,
+  get_ksef_statistics:          0,
+  get_settings:                 0,
+  get_dashboard:                0,
+  get_close_month_status:       0,
+  get_referral:                 0,
+  get_referral_invitations:     0,
+  refresh:                      0,
 
   // --- navigation / UI-opening actions ---
-  open_income:                  "1.0.0",   // open_invoice tool
-  open_income_form:             "1.0.0",
-  open_contractor_form:         "1.0.0",
-  show_statistics:              "1.0.0",
-  show_tasks:                   "1.0.0",
-  show_task:                    "1.0.0",
-  show_contractors:             "1.0.0",
-  show_contractor:              "1.0.0",
-  show_sequences:               "1.0.0",
-  show_ksef:                    "1.0.0",
-  submit_bug_report:            "1.0.0",
+  open_income:                  0,
+  open_income_form:             0,
+  open_contractor_form:         0,
+  show_statistics:              0,
+  show_tasks:                   0,
+  show_task:                    0,
+  show_contractors:             0,
+  show_contractor:              0,
+  show_sequences:               0,
+  show_ksef:                    0,
+  submit_bug_report:            0,
 
-  // --- filter actions (SET_FILTERS — requires app >= 1.51.0 to handle the action) ---
-  // UWAGA: wersja minimalna jest powiązana z obsługą IntentType.SET_FILTERS w aplikacji.
-  // Przy zmianie minVersion zaktualizuj też: scanner/ios/src/intents/types.ts
-  set_filters:                  "1.51.0",
+  // --- filter actions (requires app to handle SET_FILTERS intent) ---
+  set_filters:                  151000,
 
-  // --- mutating actions (require a minimum version for safety) ---
-  // TODO: set accurate minimum versions once known from release history
-  download_income_pdf:          "1.0.0",
-  mark_invoice_as_accounted:    "1.0.0",
-  unaccount_invoice:            "1.0.0",
-  send_invoice:                 "1.0.0",
-  send_invoice_duplicate:       "1.0.0",
-  send_invoice_reminder:        "1.0.0",
-  edit_income:                  "1.0.0",
-  edit_contractor:              "1.0.0",
-  approve_month:                "1.0.0",
+  // --- mutating actions ---
+  download_income_pdf:          0,
+  mark_invoice_as_accounted:    0,
+  unaccount_invoice:            0,
+  send_invoice:                 0,
+  send_invoice_duplicate:       0,
+  send_invoice_reminder:        0,
+  edit_income:                  0,
+  edit_contractor:              0,
+  approve_month:                0,
 };
 
 /**
- * Version used when the client sends no X-App-Version header.
- * Chosen as a conservative baseline — enables only the most
- * fundamental read-only tools.
+ * User-facing features registry.
+ * Each entry describes a feature introduced in a given build.
+ * Used to inform the model when a user asks about a feature their app lacks.
  */
-export const FALLBACK_VERSION = "1.0.0";
+export const FEATURES_BY_BUILD: Array<{ minBuild: number; name: string; description: string }> = [
+  {
+    minBuild: 151000,
+    name: 'filtrowanie AI',
+    description: 'Asystent AI może automatycznie ustawiać filtry na liście faktur i kosztów na podstawie opisu słownego.',
+  },
+];
+
+/** Build used when client sends no or invalid X-App-Version header. */
+export const FALLBACK_BUILD = 0;
 
 /**
- * Parse a semver string into [major, minor, patch].
+ * Parse a build code string to an integer.
  * Returns null for invalid or missing input.
  */
-export function parseSemver(version: string | undefined | null): [number, number, number] | null {
-  if (!version) return null;
-  const match = /^(\d+)\.(\d+)\.(\d+)/.exec(version.trim());
-  if (!match) return null;
+export function parseBuildCode(raw: string | undefined | null): number | null {
+  if (!raw) return null;
+  const n = parseInt(raw.trim(), 10);
+  return isNaN(n) ? null : n;
+}
 
-  return [Number(match[1]), Number(match[2]), Number(match[3])];
+export function isValidBuildCode(raw: string | undefined | null): boolean {
+  return parseBuildCode(raw) !== null;
 }
 
 /**
- * Returns true when `candidate` is a valid semver string.
+ * Returns the set of tool names available for the given build code.
  */
-export function isValidSemver(version: string | undefined | null): boolean {
-  return parseSemver(version) !== null;
-}
-
-/**
- * Compare two semver strings.
- * Returns:
- *  -1 when a < b
- *   0 when a === b
- *   1 when a > b
- */
-export function compareSemver(a: string, b: string): -1 | 0 | 1 {
-  const pa = parseSemver(a);
-  const pb = parseSemver(b);
-
-  // Treat unparseable as 0.0.0
-  const [aMaj, aMin, aPat] = pa ?? [0, 0, 0];
-  const [bMaj, bMin, bPat] = pb ?? [0, 0, 0];
-
-  if (aMaj !== bMaj) return aMaj > bMaj ? 1 : -1;
-  if (aMin !== bMin) return aMin > bMin ? 1 : -1;
-  if (aPat !== bPat) return aPat > bPat ? 1 : -1;
-
-  return 0;
-}
-
-/**
- * Returns true when `appVersion` satisfies the minimum required version
- * for a given action (i.e. appVersion >= minVersion).
- */
-function actionAvailable(appVersion: string, minVersion: string): boolean {
-  return compareSemver(appVersion, minVersion) >= 0;
-}
-
-/**
- * Returns the set of tool names available for the given app version.
- * If `rawVersion` is missing or not a valid semver, FALLBACK_VERSION is used.
- */
-export function getAvailableActions(rawVersion: string | undefined | null): Set<string> {
-  const effectiveVersion = isValidSemver(rawVersion)
-    ? rawVersion!
-    : FALLBACK_VERSION;
-
+export function getAvailableActions(rawBuild: string | undefined | null): Set<string> {
+  const build = parseBuildCode(rawBuild) ?? FALLBACK_BUILD;
   const available = new Set<string>();
-
-  for (const [toolName, minVersion] of Object.entries(CHAT_ACTIONS_MIN_VERSION)) {
-    if (actionAvailable(effectiveVersion, minVersion)) {
-      available.add(toolName);
-    }
+  for (const [tool, minBuild] of Object.entries(CHAT_ACTIONS_MIN_BUILD)) {
+    if (build >= minBuild) available.add(tool);
   }
-
   return available;
+}
+
+/**
+ * Returns list of features the user does not have (their build is too old).
+ */
+export function getMissingFeatures(userBuild: number): Array<{ name: string; description: string }> {
+  return FEATURES_BY_BUILD.filter(f => f.minBuild > userBuild);
+}
+
+/**
+ * Returns true if the user's build is behind LATEST_BUILD.
+ */
+export function isOutdated(userBuild: number): boolean {
+  return userBuild < LATEST_BUILD;
 }

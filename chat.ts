@@ -5,9 +5,9 @@ import { config, openai, Sentry } from "./config";
 import { buildSystemPrompt, parseScreenContext } from "./prompt";
 import { chatTools, runToolForModel } from "./tools";
 import type { ApiContext } from "./tools/types";
-import { getAvailableActions, isValidSemver, FALLBACK_VERSION } from "./actionVersioning";
+import { getAvailableActions, isValidBuildCode, isOutdated, getMissingFeatures, parseBuildCode, FALLBACK_BUILD, LATEST_BUILD } from "./actionVersioning";
 
-/** Accepts plain strings as well as content-block arrays (`[{ type: "text", text }]`). */
+/** Accepts plain strings as well as content-block arrays. */
 function contentToText(content: unknown): string {
   if (typeof content === "string") return content;
   if (Array.isArray(content)) {
@@ -27,24 +27,21 @@ export function toChatHistory(raw: unknown): ResponseInputItem[] {
 }
 
 export async function chatHandler(req: Request, res: Response) {
-  // tu: sprawdź token użytkownika i limit wiadomości
   const token = (req.headers.authorization ?? "").replace("Bearer ", "");
   const apiUrl = (req.headers["x-api-url"] as string) ?? "";
   const screenContext = parseScreenContext(req.headers["x-screen-context"] as string | undefined);
   const rawAppVersion = req.headers["x-app-version"] as string | undefined;
-  const appVersion = isValidSemver(rawAppVersion) ? rawAppVersion! : FALLBACK_VERSION;
-  const availableActions = getAvailableActions(appVersion);
+  const userBuild = parseBuildCode(rawAppVersion) ?? FALLBACK_BUILD;
+  const availableActions = getAvailableActions(rawAppVersion);
   const sse = {
     text:   (chunk: string) => res.write(`event: text\ndata: ${JSON.stringify(chunk)}\n\n`),
     action: (event: object) => res.write(`event: action\ndata: ${JSON.stringify(event)}\n\n`),
     done:   ()              => res.write(`event: done\ndata: [DONE]\n\n`),
   };
   const ctx: ApiContext = { token, apiUrl, emit: (event) => {
-    // Filter outgoing action events to only allowed tools.
-    // "refresh" actions have no tool name restriction — always pass through.
     const e = event as { type?: string; name?: string };
     if (e.type !== "refresh" && e.name && !availableActions.has(e.name)) {
-      console.warn(`[version] blocking action '${e.name}' for appVersion=${appVersion}`);
+      console.warn(`[version] blocking action '${e.name}' for build=${userBuild}`);
       return;
     }
     sse.action(event);
@@ -52,23 +49,26 @@ export async function chatHandler(req: Request, res: Response) {
 
   const input = toChatHistory(req.body?.messages);
   const latestUserMessage = input.at(-1) as { content?: unknown } | undefined;
-  const screenLog = screenContext.screen
-    ? `| screen: ${JSON.stringify(screenContext)}`
-    : "";
-  const versionLog = rawAppVersion
-    ? `| version: ${rawAppVersion}${!isValidSemver(rawAppVersion) ? " (invalid, using fallback)" : ""}`
-    : `| version: missing (using fallback ${FALLBACK_VERSION})`;
-  console.log("[user]", latestUserMessage?.content, "| api:", apiUrl, screenLog, versionLog);
+  const screenLog = screenContext.screen ? `| screen: ${JSON.stringify(screenContext)}` : "";
+  const buildLog = rawAppVersion
+    ? `| build: ${rawAppVersion}${!isValidBuildCode(rawAppVersion) ? " (invalid, fallback)" : ""}`
+    : `| build: missing (fallback ${FALLBACK_BUILD})`;
+  console.log("[user]", latestUserMessage?.content, "| api:", apiUrl, screenLog, buildLog);
 
   const versionedChatTools = chatTools.filter((t) => availableActions.has(t.name));
+  const missingFeatures = getMissingFeatures(userBuild);
+  const outdated = isOutdated(userBuild);
 
   res.setHeader("Content-Type", "text/event-stream");
-
-  // Stop calling the model if the app disconnects mid-stream.
   const abort = new AbortController();
   res.on("close", () => { if (!res.writableEnded) abort.abort(); });
 
-  const instructions = buildSystemPrompt(screenContext);
+  const instructions = buildSystemPrompt(screenContext, {
+    userBuild,
+    latestBuild: LATEST_BUILD,
+    outdated,
+    missingFeatures,
+  });
   let fullReply = "";
   let iteration = 0;
 
@@ -76,8 +76,6 @@ export async function chatHandler(req: Request, res: Response) {
     while (true) {
       if (iteration++ > 0 && fullReply.length > 0) sse.text("\n\n");
 
-      // Stateless (store: false): the whole conversation is sent each time, as before.
-      // Encrypted reasoning items are passed back between tool-call iterations.
       const stream = await openai.responses.create(
         {
           model: config.chatModel,
