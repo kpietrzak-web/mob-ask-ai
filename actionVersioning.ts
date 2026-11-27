@@ -47,8 +47,8 @@ export const CHAT_ACTIONS_MIN_BUILD: Record<string, number> = {
   // --- filter actions (requires app to handle SET_FILTERS intent) ---
   set_filters:                  151000,
 
-  // --- "zrób to za mnie" reply button (requires app to handle `send_message` suggested action) ---
-  suggest_reply:                151000,
+  // --- "zrób to za mnie" reply button (requires app to handle `send_message` suggested action; ships in build 150068) ---
+  suggest_reply:                150068,
 
   // --- mutating actions ---
   download_income_pdf:          0,
