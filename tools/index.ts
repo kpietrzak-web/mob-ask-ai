@@ -24,6 +24,7 @@ import openContractorFormTool from "./open-contractor-form";
 import companyGusTool from "./company-gus";
 import createContractorTool from "./create-contractor";
 import suggestReplyTool from "./suggest-reply";
+import createInvoiceTool from "./create-invoice";
 import openInvoiceFormTool from "./open-income-form";
 import openInvoiceTool from "./open-invoice";
 import downloadInvoicePdfTool from "./download-invoice-pdf";
@@ -69,6 +70,7 @@ const registry: Record<string, ToolDefinition> = {
   [companyGusTool.schema.name]: companyGusTool,
   [createContractorTool.schema.name]: createContractorTool,
   [suggestReplyTool.schema.name]: suggestReplyTool,
+  [createInvoiceTool.schema.name]: createInvoiceTool,
   [openInvoiceFormTool.schema.name]: openInvoiceFormTool,
   [openInvoiceTool.schema.name]: openInvoiceTool,
   [downloadInvoicePdfTool.schema.name]: downloadInvoicePdfTool,

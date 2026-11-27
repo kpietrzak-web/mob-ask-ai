@@ -63,6 +63,7 @@ export const CHAT_ACTIONS_MIN_BUILD: Record<string, number> = {
   // Backend-side writes — emit only existing actions, so available to all builds.
   get_company_by_nip:           0,
   create_contractor:            0,
+  create_invoice:               0,
 };
 
 /**
