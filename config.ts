@@ -16,8 +16,20 @@ function env(name: string, fallback: string): string {
   return v === undefined || v === "" ? fallback : v;
 }
 
+const nodeEnv = process.env.NODE_ENV ?? "production";
+
 export const config = {
   port: Number(env("PORT", "3000")),
+
+  /** True on dev/local (NODE_ENV !== "production"). Gates verbose logging. */
+  isDev: nodeEnv !== "production",
+
+  /** Token-usage logging to PostgreSQL. Off unless USAGE_LOGGING=true. */
+  usage: {
+    enabled: env("USAGE_LOGGING", "false") === "true",
+    databaseUrl: process.env.DATABASE_URL ?? "",
+    hashSalt: env("USAGE_HASH_SALT", "mob-ask-ai"),
+  },
 
   /** Text chat (`POST /chat`). */
   chatModel: env("OPENAI_CHAT_MODEL", "gpt-5.5"),

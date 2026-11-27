@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Express.js + TypeScript AI assistant server for a Polish accounting mobile app (JDG/sole proprietorship). The server acts as a middleware between a React Native app and the OpenAI API, with tool use to fetch data from an external accounting API. It offers a text chat (Responses API, SSE) and voice-to-voice (Realtime API, WebSocket).
 
+> **LLM provider: OpenAI.** The assistant runs on OpenAI models — text chat on the Responses API (`gpt-5.5` by default), voice on the Realtime API (`gpt-realtime`) + transcription (`gpt-4o-transcribe`). An earlier version of this project used Anthropic Claude; it has since been **migrated fully to OpenAI**. Any remaining "Claude" references are historical — all current model calls go through the OpenAI SDK (`openai`).
+
 ## Commands
 
 ```bash
@@ -24,7 +26,24 @@ Configuration is via env vars or a gitignored `.env` file, see `.env.example` (m
 | `prompt.ts` | screen context + system prompt (text) + voice instructions (system prompt + voice rules) |
 | `chat.ts` | `POST /chat` — agentic loop over Responses API streaming |
 | `realtime.ts` | `/realtime` WebSocket — relay to OpenAI Realtime, server-side tool execution |
+| `logger.ts` | `devLog` / `devWarn` — verbose logging gated to dev (NODE_ENV !== "production") |
+| `usage/` | token-usage logging to PostgreSQL (off unless `USAGE_LOGGING=true`) |
 | `docs/realtime.md` | protocol for the mobile app (voice) |
+
+### Logging & PII
+
+The informational logs (`[user]`, `[agent]`, `[tool]`, `[voice]`) print message content, tool arguments and user emails — **PII**. They go through `devLog` / `devWarn` in `logger.ts` and only emit when `NODE_ENV !== "production"` (i.e. dev server / local). Production emits only genuine errors (`console.error` + Sentry). The dev server must set `NODE_ENV=development` in its `.env` to see these logs.
+
+### Token-usage logging (`usage/`)
+
+Captures token usage + computed USD cost per model invocation and writes raw events to PostgreSQL for later cost analysis. **Disabled by default** — enabled only when `USAGE_LOGGING=true` and `DATABASE_URL` is set (then zero overhead otherwise).
+
+- One row per model call: text chat = one agentic-loop iteration; voice = one `response.done`; STT = one transcription.
+- Captured in `chat.ts` (`response.completed` → `response.usage`) and `realtime.ts` (`response.done` / transcription usage). Reporting levels (per message / conversation / action) are derived later with SQL — the backend never pre-aggregates.
+- **No PII stored**: no message content or tool arguments; user/tenant identified by HMAC (`USAGE_HASH_SALT`). `conversation_id` / `message_id` come from optional `X-Conversation-Id` / `X-Message-Id` headers, else generated per request.
+- Writes are buffered + batched + fire-and-forget; a DB failure is logged (Sentry once) but never breaks the chat.
+- Files: `usage/pricing.ts` (versioned OpenAI price table — update via PR on price changes), `usage/actionCategories.ts` (tool→action-category map), `usage/usageLogger.ts` (pg pool + buffered writer), `usage/schema.sql` (table DDL, also applied on startup), `usage/types.ts`.
+- Full analysis & rationale: `~/Desktop/analiza-pomiaru-tokenow-czat-ai.md`.
 
 ## Architecture
 

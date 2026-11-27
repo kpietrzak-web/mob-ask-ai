@@ -5,6 +5,10 @@ import { config } from "./config";
 import { buildVoiceInstructions, parseScreenContext, type ScreenContext } from "./prompt";
 import { realtimeTools, runToolForModel } from "./tools";
 import type { ApiContext } from "./tools/types";
+import { parseBuildCode } from "./actionVersioning";
+import { devLog } from "./logger";
+import { recordUsage, computeRealtimeCost, actionCategories, hashRef, newId } from "./usage";
+import type { RealtimeTokenUsage } from "./usage/pricing";
 
 /**
  * Voice-to-voice over the OpenAI Realtime API.
@@ -44,9 +48,9 @@ export function attachRealtime(server: Server) {
 
   server.on("upgrade", (req, socket, head) => {
     const url = new URL(req.url ?? "/", "http://localhost");
-    console.log(`[realtime] upgrade request: ${url.pathname} from ${req.socket.remoteAddress}`);
+    devLog(`[realtime] upgrade request: ${url.pathname} from ${req.socket.remoteAddress}`);
     if (url.pathname !== REALTIME_PATH) {
-      console.log(`[realtime] rejected upgrade — unknown path: ${url.pathname}`);
+      devLog(`[realtime] rejected upgrade — unknown path: ${url.pathname}`);
       socket.destroy();
       return;
     }
@@ -59,7 +63,7 @@ export function attachRealtime(server: Server) {
       receivedKey.length === appKey.length &&
       timingSafeEqual(Buffer.from(receivedKey), Buffer.from(appKey));
     if (!keyValid) {
-      console.log(`[realtime] rejected upgrade — invalid x-app-key`);
+      devLog(`[realtime] rejected upgrade — invalid x-app-key`);
       socket.write("HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\n\r\n");
       socket.destroy();
       return;
@@ -70,13 +74,13 @@ export function attachRealtime(server: Server) {
     const tokenFromQuery = url.searchParams.get("token") ?? "";
     const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : tokenFromQuery.trim();
     if (!token) {
-      console.log(`[realtime] rejected upgrade — missing authorization token`);
+      devLog(`[realtime] rejected upgrade — missing authorization token`);
       socket.write("HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\n\r\n");
       socket.destroy();
       return;
     }
 
-    console.log(`[realtime] accepting WebSocket upgrade`);
+    devLog(`[realtime] accepting WebSocket upgrade`);
     wss.handleUpgrade(req, socket, head, (ws) => handleSession(ws, req, url));
   });
 }
@@ -97,8 +101,14 @@ function handleSession(client: WebSocket, req: IncomingMessage, url: URL) {
   // No AI response is generated; transcription text is forwarded via mob.transcript.
   const isSearchMode = header(req, "x-voice-mode") === "search";
 
+  // Usage-logging context: one WebSocket session = one conversation. No PII stored.
+  const conversationId = newId();
+  const voiceUserRef = hashRef(userEmail || token);
+  const voiceTenantRef = hashRef(apiUrl);
+  const voiceAppBuild = parseBuildCode(header(req, "x-app-version"));
+
   const tag = `[voice ${token.slice(-6) || "anon"}]`;
-  console.log(`${tag} connected | email: ${userEmail || "unknown"} | api: ${apiUrl}`, screenContext.screen ? `| screen: ${JSON.stringify(screenContext)}` : "");
+  devLog(`${tag} connected | email: ${userEmail || "unknown"} | api: ${apiUrl}`, screenContext.screen ? `| screen: ${JSON.stringify(screenContext)}` : "");
 
   const sendClient = (event: object) => {
     if (client.readyState === WebSocket.OPEN) client.send(JSON.stringify(event));
@@ -131,10 +141,81 @@ function handleSession(client: WebSocket, req: IncomingMessage, url: URL) {
     }
   };
 
+  /** Record token usage for one voice model response (audio is the big cost). */
+  function recordVoiceResponseUsage(response: { id?: string; status?: string; output?: any[]; usage?: RealtimeTokenUsage } | undefined): void {
+    const usage = response?.usage;
+    if (!usage) return;
+    const calls = (response?.output ?? []).filter((i) => i?.type === "function_call");
+    const toolNames = calls.map((c) => c.name as string);
+    const { costUsd, priceVersion } = computeRealtimeCost(config.realtimeModel, usage);
+    recordUsage({
+      channel: "voice",
+      model: config.realtimeModel,
+      conversationId,
+      messageId: response?.id ?? newId(),
+      iteration: 0,
+      userRef: voiceUserRef,
+      tenantRef: voiceTenantRef,
+      screen: typeof screenContext.screen === "string" ? screenContext.screen : null,
+      appBuild: voiceAppBuild,
+      inputTokens: usage.input_tokens ?? 0,
+      cachedInputTokens: usage.input_token_details?.cached_tokens ?? 0,
+      outputTokens: usage.output_tokens ?? 0,
+      reasoningTokens: 0,
+      audioInputTokens: usage.input_token_details?.audio_tokens ?? 0,
+      audioOutputTokens: usage.output_token_details?.audio_tokens ?? 0,
+      totalTokens: usage.input_tokens != null && usage.output_tokens != null ? usage.input_tokens + usage.output_tokens : 0,
+      toolCalls: toolNames,
+      actionTypes: actionCategories(toolNames),
+      actionDirect: true,
+      costUsd,
+      priceVersion,
+      latencyMs: null,
+      incomplete: response?.status !== "completed",
+    });
+  }
+
+  /** Record transcription (STT) usage. Only token-billed models are priced here. */
+  function recordTranscribeUsage(usage: { type?: string; input_tokens?: number; output_tokens?: number; total_tokens?: number; input_token_details?: { audio_tokens?: number; text_tokens?: number } } | undefined): void {
+    if (!usage || usage.type !== "tokens") return;
+    const inAudio = usage.input_token_details?.audio_tokens ?? 0;
+    const inText = usage.input_token_details?.text_tokens ?? 0;
+    const outText = usage.output_tokens ?? 0;
+    const { costUsd, priceVersion } = computeRealtimeCost(config.realtimeTranscriptionModel, {
+      input_token_details: { audio_tokens: inAudio, text_tokens: inText },
+      output_token_details: { text_tokens: outText, audio_tokens: 0 },
+    });
+    recordUsage({
+      channel: "voice_transcribe",
+      model: config.realtimeTranscriptionModel,
+      conversationId,
+      messageId: newId(),
+      iteration: 0,
+      userRef: voiceUserRef,
+      tenantRef: voiceTenantRef,
+      screen: typeof screenContext.screen === "string" ? screenContext.screen : null,
+      appBuild: voiceAppBuild,
+      inputTokens: usage.input_tokens ?? inAudio + inText,
+      cachedInputTokens: 0,
+      outputTokens: outText,
+      reasoningTokens: 0,
+      audioInputTokens: inAudio,
+      audioOutputTokens: 0,
+      totalTokens: usage.total_tokens ?? 0,
+      toolCalls: [],
+      actionTypes: [],
+      actionDirect: false,
+      costUsd,
+      priceVersion,
+      latencyMs: null,
+      incomplete: false,
+    });
+  }
+
   // ---------- OpenAI → app ----------
 
   upstream.on("open", () => {
-    console.log(`${tag} upstream (OpenAI) connected — sending session.update (mode: ${isSearchMode ? "search/transcribe" : "voice"})`);
+    devLog(`${tag} upstream (OpenAI) connected — sending session.update (mode: ${isSearchMode ? "search/transcribe" : "voice"})`);
 
     if (isSearchMode) {
       // Transcription-only mode: no AI response, no tools — just speech-to-text.
@@ -193,16 +274,18 @@ function handleSession(client: WebSocket, req: IncomingMessage, url: URL) {
 
     switch (event.type) {
       case "conversation.item.input_audio_transcription.completed":
-        console.log(`${tag} [user]`, event.transcript);
+        devLog(`${tag} [user]`, event.transcript);
+        recordTranscribeUsage(event.usage);
         // In search mode, forward the transcript to the app as mob.transcript.
         if (isSearchMode && event.transcript) {
           sendClient({ type: "mob.transcript", text: event.transcript });
         }
         break;
       case "response.output_audio_transcript.done":
-        console.log(`${tag} [agent]`, event.transcript);
+        devLog(`${tag} [agent]`, event.transcript);
         break;
       case "response.done":
+        recordVoiceResponseUsage(event.response);
         if (!isSearchMode) void handleResponseDone(event.response);
         break;
       case "error":
@@ -217,14 +300,14 @@ function handleSession(client: WebSocket, req: IncomingMessage, url: URL) {
     if (calls.length === 0) return;
     // Interrupted by the user (barge-in): do not run the tools (e.g. do not send an invoice).
     if (response?.status !== "completed") {
-      console.log(`${tag} response ${response?.status}, skipping ${calls.length} tool call(s)`);
+      devLog(`${tag} response ${response?.status}, skipping ${calls.length} tool call(s)`);
       return;
     }
 
     await Promise.all(calls.map(async (call) => {
       sendClient({ type: "mob.tool", name: call.name, status: "started" });
       const output = await runToolForModel(call.name, call.arguments ?? "", ctx, `${tag} [tool]`);
-      console.log(`${tag} [tool] ${call.name} result:`, JSON.stringify(output).slice(0, 400));
+      devLog(`${tag} [tool] ${call.name} result:`, JSON.stringify(output).slice(0, 400));
       sendClient({ type: "mob.tool", name: call.name, status: "done" });
       sendUpstream({
         type: "conversation.item.create",
@@ -235,7 +318,7 @@ function handleSession(client: WebSocket, req: IncomingMessage, url: URL) {
   }
 
   upstream.on("close", (code, reason) => {
-    console.log(`${tag} openai closed ${code} ${reason.toString()}`);
+    devLog(`${tag} openai closed ${code} ${reason.toString()}`);
     closeBoth(code === 1000 ? 1000 : 1011, "upstream closed");
   });
 
@@ -250,7 +333,7 @@ function handleSession(client: WebSocket, req: IncomingMessage, url: URL) {
   client.on("message", (data: RawData, isBinary: boolean) => {
     if (isBinary) {
       const buf = Array.isArray(data) ? Buffer.concat(data) : Buffer.from(data as ArrayBuffer);
-      console.log(`${tag} audio frame received — ${buf.byteLength} bytes`);
+      devLog(`${tag} audio frame received — ${buf.byteLength} bytes`);
       sendUpstream({ type: "input_audio_buffer.append", audio: buf.toString("base64") });
       return;
     }
@@ -262,7 +345,7 @@ function handleSession(client: WebSocket, req: IncomingMessage, url: URL) {
     switch (event.type) {
       case "mob.context":
         screenContext = (event.screenContext ?? {}) as ScreenContext;
-        console.log(`${tag} screen: ${JSON.stringify(screenContext)}`);
+        devLog(`${tag} screen: ${JSON.stringify(screenContext)}`);
         sendUpstream({
           type: "session.update",
           session: { type: "realtime", instructions: buildVoiceInstructions(screenContext) },
@@ -313,7 +396,7 @@ function handleSession(client: WebSocket, req: IncomingMessage, url: URL) {
   });
 
   client.on("close", () => {
-    console.log(`${tag} disconnected`);
+    devLog(`${tag} disconnected`);
     closeBoth();
   });
 

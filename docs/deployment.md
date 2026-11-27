@@ -55,6 +55,35 @@ Plik `.env` **nie jest w repo**. Każde środowisko ma własny `.env` w swoim ka
 
 Zmienne: `OPENAI_API_KEY`, `APP_KEY`, `SENTRY_DSN`, `PORT` (opcjonalne — domyślnie 3000).
 
+Logowanie zużycia tokenów (opcjonalne): `NODE_ENV`, `USAGE_LOGGING`, `DATABASE_URL`, `USAGE_HASH_SALT` — patrz niżej.
+
+## PostgreSQL — logowanie zużycia tokenów
+
+Backend może zapisywać surowe zdarzenia zużycia tokenów (koszt per wywołanie modelu) do PostgreSQL. Funkcja jest **wyłączona domyślnie** — włącza ją flaga `USAGE_LOGGING=true` + ustawiony `DATABASE_URL`. Tabela `llm_usage_events` tworzona jest automatycznie przy starcie (DDL w `usage/usageLogger.ts`, kopia w `usage/schema.sql`). Zapis jest asynchroniczny i buforowany — błąd bazy nie wywraca czatu.
+
+**Instalacja (serwer, raz):**
+```bash
+sudo apt-get update && sudo apt-get install -y postgresql
+sudo -u postgres psql -c "CREATE ROLE mob_ask_ai LOGIN PASSWORD '<hasło>';"
+sudo -u postgres psql -c "CREATE DATABASE mob_ask_ai_dev OWNER mob_ask_ai;"   # dev
+sudo -u postgres psql -c "CREATE DATABASE mob_ask_ai     OWNER mob_ask_ai;"   # prod (gdy potrzebne)
+```
+
+**Konfiguracja środowiska** (w `.env` danego środowiska):
+```
+NODE_ENV=development                 # dev: włącza też verbose logi; prod zostaw production
+USAGE_LOGGING=true
+DATABASE_URL=postgres://mob_ask_ai:<hasło>@localhost:5432/mob_ask_ai_dev
+USAGE_HASH_SALT=<losowy_sekret>
+```
+
+Dev i prod używają **osobnych baz** (`mob_ask_ai_dev` / `mob_ask_ai`), ten sam użytkownik. Logowanie zaczynamy na **dev**.
+
+**Podgląd danych:**
+```bash
+sudo -u postgres psql mob_ask_ai_dev -c "SELECT channel, model, SUM(cost_usd) cost, COUNT(*) n FROM llm_usage_events GROUP BY 1,2;"
+```
+
 ## Wdrożenie produkcji
 
 ```bash

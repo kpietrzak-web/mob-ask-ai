@@ -2,6 +2,7 @@ import type { FunctionTool } from "openai/resources/responses/responses";
 import type { RealtimeFunctionTool } from "openai/resources/realtime/realtime";
 import type { ApiContext, ToolDefinition, ToolSchema } from "./types";
 import { Sentry } from "../config";
+import { devLog } from "../logger";
 import userInfoTool from "./user-info";
 import contractorsTool from "./contractors";
 import bankAccountsTool from "./bank-accounts";
@@ -130,9 +131,9 @@ export async function runToolForModel(
 ): Promise<string> {
   try {
     const input = (rawArgs ? JSON.parse(rawArgs) : {}) as Record<string, unknown>;
-    console.log(`${logPrefix} ${name}`, Object.keys(input).length ? input : "");
+    devLog(`${logPrefix} ${name}`, Object.keys(input).length ? input : "");
     const result = await executeTool(name, input, ctx);
-    console.log(`${logPrefix} ${name} → done`);
+    devLog(`${logPrefix} ${name} → done`);
     return JSON.stringify(result ?? null);
   } catch (err) {
     console.error(`${logPrefix} ${name} → error`, err);

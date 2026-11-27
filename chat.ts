@@ -1,11 +1,24 @@
 import type { Request, Response } from "express";
-import type { ResponseFunctionToolCall, ResponseInputItem, ResponseOutputItem } from "openai/resources/responses/responses";
+import type { Response as OpenAIResponse, ResponseFunctionToolCall, ResponseInputItem, ResponseOutputItem } from "openai/resources/responses/responses";
 import type { ReasoningEffort } from "openai/resources/shared";
 import { config, openai, Sentry } from "./config";
 import { buildSystemPrompt, parseScreenContext } from "./prompt";
 import { chatTools, runToolForModel } from "./tools";
 import type { ApiContext } from "./tools/types";
 import { getAvailableActions, isValidBuildCode, isOutdated, getMissingFeatures, parseBuildCode, FALLBACK_BUILD, LATEST_BUILD } from "./actionVersioning";
+import { devLog, devWarn } from "./logger";
+import { recordUsage, computeChatCost, actionCategories, hashRef, newId } from "./usage";
+
+/** True if any tool call was invoked with `actionType: "direct"`. Reads only the flag, never stores args. */
+function hasDirectAction(calls: ResponseFunctionToolCall[]): boolean {
+  return calls.some((c) => {
+    try {
+      return (JSON.parse(c.arguments) as { actionType?: string })?.actionType === "direct";
+    } catch {
+      return false;
+    }
+  });
+}
 
 /** Accepts plain strings as well as content-block arrays. */
 function contentToText(content: unknown): string {
@@ -33,6 +46,15 @@ export async function chatHandler(req: Request, res: Response) {
   const rawAppVersion = req.headers["x-app-version"] as string | undefined;
   const userBuild = parseBuildCode(rawAppVersion) ?? FALLBACK_BUILD;
   const availableActions = getAvailableActions(rawAppVersion);
+
+  // Usage-logging context (no PII). conversation/message ids come from the app
+  // if it sends them, otherwise each request is treated as its own turn.
+  const conversationId = (req.headers["x-conversation-id"] as string) || newId();
+  const messageId = (req.headers["x-message-id"] as string) || newId();
+  const userRef = hashRef(token);
+  const tenantRef = hashRef(apiUrl);
+  const appBuild = parseBuildCode(rawAppVersion);
+  const screenKey = typeof screenContext.screen === "string" ? screenContext.screen : null;
   const sse = {
     text:   (chunk: string) => res.write(`event: text\ndata: ${JSON.stringify(chunk)}\n\n`),
     action: (event: object) => res.write(`event: action\ndata: ${JSON.stringify(event)}\n\n`),
@@ -41,7 +63,7 @@ export async function chatHandler(req: Request, res: Response) {
   const ctx: ApiContext = { token, apiUrl, emit: (event) => {
     const e = event as { type?: string; name?: string };
     if (e.type !== "refresh" && e.name && !availableActions.has(e.name)) {
-      console.warn(`[version] blocking action '${e.name}' for build=${userBuild}`);
+      devWarn(`[version] blocking action '${e.name}' for build=${userBuild}`);
       return;
     }
     sse.action(event);
@@ -53,7 +75,7 @@ export async function chatHandler(req: Request, res: Response) {
   const buildLog = rawAppVersion
     ? `| build: ${rawAppVersion}${!isValidBuildCode(rawAppVersion) ? " (invalid, fallback)" : ""}`
     : `| build: missing (fallback ${FALLBACK_BUILD})`;
-  console.log("[user]", latestUserMessage?.content, "| api:", apiUrl, screenLog, buildLog);
+  devLog("[user]", latestUserMessage?.content, "| api:", apiUrl, screenLog, buildLog);
 
   const versionedChatTools = chatTools.filter((t) => availableActions.has(t.name));
   const missingFeatures = getMissingFeatures(userBuild);
@@ -96,6 +118,10 @@ export async function chatHandler(req: Request, res: Response) {
       );
 
       let output: ResponseOutputItem[] = [];
+      let usage: OpenAIResponse["usage"] | undefined;
+      let model = config.chatModel;
+      let incomplete = false;
+      const iterationStart = Date.now();
 
       for await (const event of stream) {
         switch (event.type) {
@@ -106,8 +132,11 @@ export async function chatHandler(req: Request, res: Response) {
           case "response.completed":
           case "response.incomplete":
             output = event.response.output;
+            usage = event.response.usage;
+            model = event.response.model ?? model;
             if (event.type === "response.incomplete") {
-              console.warn("[warn] response incomplete:", event.response.incomplete_details);
+              incomplete = true;
+              devWarn("[warn] response incomplete:", event.response.incomplete_details);
             }
             break;
           case "response.failed":
@@ -118,8 +147,39 @@ export async function chatHandler(req: Request, res: Response) {
       }
 
       const calls = output.filter((i): i is ResponseFunctionToolCall => i.type === "function_call");
+
+      if (usage) {
+        const toolNames = calls.map((c) => c.name);
+        const { costUsd, priceVersion } = computeChatCost(model, usage);
+        recordUsage({
+          channel: "chat",
+          model,
+          conversationId,
+          messageId,
+          iteration: iteration - 1,
+          userRef,
+          tenantRef,
+          screen: screenKey,
+          appBuild,
+          inputTokens: usage.input_tokens ?? 0,
+          cachedInputTokens: usage.input_tokens_details?.cached_tokens ?? 0,
+          outputTokens: usage.output_tokens ?? 0,
+          reasoningTokens: usage.output_tokens_details?.reasoning_tokens ?? 0,
+          audioInputTokens: 0,
+          audioOutputTokens: 0,
+          totalTokens: usage.total_tokens ?? 0,
+          toolCalls: toolNames,
+          actionTypes: actionCategories(toolNames),
+          actionDirect: hasDirectAction(calls),
+          costUsd,
+          priceVersion,
+          latencyMs: Date.now() - iterationStart,
+          incomplete,
+        });
+      }
+
       if (calls.length === 0) {
-        console.log("[agent]", fullReply);
+        devLog("[agent]", fullReply);
         sse.done();
         res.end();
         break;
