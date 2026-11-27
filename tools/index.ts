@@ -21,6 +21,9 @@ import closeMonthStatusTool from "./close-month-status";
 import referralTool from "./referral";
 import referralInvitationsTool from "./referral-invitations";
 import openContractorFormTool from "./open-contractor-form";
+import companyGusTool from "./company-gus";
+import createContractorTool from "./create-contractor";
+import suggestReplyTool from "./suggest-reply";
 import openInvoiceFormTool from "./open-income-form";
 import openInvoiceTool from "./open-invoice";
 import downloadInvoicePdfTool from "./download-invoice-pdf";
@@ -63,6 +66,9 @@ const registry: Record<string, ToolDefinition> = {
   [referralTool.schema.name]: referralTool,
   [referralInvitationsTool.schema.name]: referralInvitationsTool,
   [openContractorFormTool.schema.name]: openContractorFormTool,
+  [companyGusTool.schema.name]: companyGusTool,
+  [createContractorTool.schema.name]: createContractorTool,
+  [suggestReplyTool.schema.name]: suggestReplyTool,
   [openInvoiceFormTool.schema.name]: openInvoiceFormTool,
   [openInvoiceTool.schema.name]: openInvoiceTool,
   [downloadInvoicePdfTool.schema.name]: downloadInvoicePdfTool,

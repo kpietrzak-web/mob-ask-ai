@@ -47,6 +47,9 @@ export const CHAT_ACTIONS_MIN_BUILD: Record<string, number> = {
   // --- filter actions (requires app to handle SET_FILTERS intent) ---
   set_filters:                  151000,
 
+  // --- "zrób to za mnie" reply button (requires app to handle `send_message` suggested action) ---
+  suggest_reply:                151000,
+
   // --- mutating actions ---
   download_income_pdf:          0,
   mark_invoice_as_accounted:    0,
@@ -57,6 +60,9 @@ export const CHAT_ACTIONS_MIN_BUILD: Record<string, number> = {
   edit_income:                  0,
   edit_contractor:              0,
   approve_month:                0,
+  // Backend-side writes — emit only existing actions, so available to all builds.
+  get_company_by_nip:           0,
+  create_contractor:            0,
 };
 
 /**
