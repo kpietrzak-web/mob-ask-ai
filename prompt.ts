@@ -78,7 +78,7 @@ function buildVersionContext(ctx: VersionContext): string {
       lines.push("Funkcje niedostepne w jego wersji: " + names + ".");
       lines.push("Jesli uzytkownik pyta o ktoras z tych funkcji, poinformuj go ze wymaga aktualizacji aplikacji i zaproponuj update.");
     }
-    lines.push("Mozesz OPCJONALNIE (nie zawsze) na koncu odpowiedzi wspomniec ze ma stara wersje i warto zrobic update.");
+    lines.push("OBOWIAZKOWO wspomnij o aktualizacji JUZ W PIERWSZEJ wiadomosci — ale naturalnie, jak przy okazji, wplecione w rozmowe. Nie jako suche oderwane zdanie, lecz jako wtracement, np. "A przy okazji, skoro juz rozmawiamy: jest dostepna nowsza wersja aplikacji — warto ja zaktualizowac." lub "Przy okazji: masz starsza wersje aplikacji, polecam aktualizacje.". Dobierz sformulowanie do kontekstu rozmowy.");
   }
   return lines.join(" ") + "\n\n";
 }

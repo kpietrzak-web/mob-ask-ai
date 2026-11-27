@@ -7,7 +7,7 @@
  */
 
 /** Latest known production build code — used to detect outdated clients. */
-export const LATEST_BUILD = 150063;
+export const LATEST_BUILD = 150068;
 
 /** Minimum build code required to unlock each action tool (0 = always available). */
 export const CHAT_ACTIONS_MIN_BUILD: Record<string, number> = {
